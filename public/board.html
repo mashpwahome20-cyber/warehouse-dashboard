@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Packing Performance Board</title>
+<style>
+  body{font-family:Arial,sans-serif;background:#12151a;padding:30px;color:#f0f0f0;position:relative;min-height:100vh;box-sizing:border-box;}
+  .board-header{display:flex;align-items:center;justify-content:space-between;width:96%;margin:0 auto 10px;}
+  .board-header h1{font-size:clamp(20px, 3.2vw, 40px);margin:0;white-space:nowrap;color:#fff;letter-spacing:1px;}
+  .board-icon{font-size:clamp(22px, 3.2vw, 40px);}
+  .board-rule{width:96%;margin:0 auto 22px;background:#2a2410;border:1px solid #f5b60e;border-radius:6px;padding:12px 18px;font-size:18px;color:#f0f0f0;}
+  .board-rule b{color:#ff6659;}
+  .board-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;width:96%;margin:0 auto;}
+  .board-card{border:1px solid #333;border-radius:10px;overflow:hidden;background:#1b1f27;box-shadow:0 4px 14px rgba(0,0,0,0.4);position:relative;}
+  .card-emoji-badge{position:absolute;top:-18px;right:-10px;font-size:46px;color:#ffcc00;filter:drop-shadow(0 3px 4px rgba(0,0,0,0.5));z-index:2;}
+  .board-card-head{padding:16px 18px;color:#fff;font-weight:bold;font-size:22px;text-align:center;letter-spacing:1px;}
+  .board-card.green .board-card-head{background:#1b6e2c;}
+  .board-card.red .board-card-head{background:#b5271f;}
+  .board-card.green{box-shadow:0 0 18px rgba(46,159,64,0.35);}
+  .board-card.red{box-shadow:0 0 18px rgba(197,40,32,0.3);}
+  .board-card-body{display:flex;align-items:center;justify-content:space-between;padding:26px 24px;}
+  .board-card-icon{margin-right:14px;display:inline-flex;vertical-align:middle;}
+  .board-card-name{font-size:32px;font-weight:700;color:#fff;}
+  .board-card-sub{font-size:15px;color:#9aa0a6;margin-top:4px;}
+  .board-card-pts{font-size:52px;font-weight:800;}
+  .board-card.green .board-card-pts{color:#4caf50;}
+  .board-card.red .board-card-pts{color:#ff5c4d;}
+  .updated-note{width:96%;margin:22px auto 0;text-align:center;color:#666;font-size:13px;}
+  .shift-heading{font-weight:800;font-size:clamp(24px, 3vw, 34px);color:#f5b60e;letter-spacing:2px;margin:26px 0 14px;width:96%;border-bottom:2px solid #f5b60e;padding-bottom:8px;}
+  .board-card.not-qualified{opacity:0.75;}
+  .board-card.not-qualified .board-card-head{background:#444!important;}
+  .board-card.partial-best .board-card-head{background:#8a6d1a!important;}
+  .board-card.partial-best .board-card-pts{color:#f5b60e!important;}
+
+  .leaderboard-panel{width:96%;margin:34px auto 0;background:#1b1f27;border:1px solid #333;border-radius:12px;padding:22px 26px;}
+  .lb-heading{font-weight:800;font-size:clamp(20px, 2.6vw, 28px);color:#f5b60e;letter-spacing:1.5px;margin-bottom:14px;}
+  .lb-filter{margin-bottom:16px;}
+  .lb-filter select{font-size:16px;padding:8px 12px;border-radius:6px;border:1px solid #444;background:#12151a;color:#fff;margin-right:10px;}
+  .lb-row{display:flex;align-items:center;gap:14px;padding:10px 4px;border-bottom:1px solid #2a2e36;}
+  .lb-rank{width:34px;font-size:18px;color:#888;font-weight:700;}
+  .lb-name{width:180px;font-size:20px;font-weight:600;color:#fff;}
+  .lb-bar-wrap{flex:1;background:#2a2e36;border-radius:5px;height:20px;overflow:hidden;}
+  .lb-bar{height:100%;background:linear-gradient(90deg,#f5b60e,#ffd766);}
+  .lb-pts{width:60px;text-align:right;font-size:22px;font-weight:800;color:#f5b60e;}
+  .lb-empty{color:#888;font-size:15px;font-style:italic;}
+</style>
+</head>
+<body>
+
+<div class="board-header">
+  <h1>📦 PACKING PERFORMANCE BOARD</h1>
+  <span class="board-icon">🏆</span>
+</div>
+<div class="board-rule"><b>⚠ Rule:</b> if a Best Picker or Packer has <b>more than 2 complaints</b> (month-to-date), <b>3 points are deducted</b>.</div>
+
+<div id="performance-board"></div>
+<div class="updated-note" id="updated-note"></div>
+
+<div class="leaderboard-panel">
+  <div class="lb-heading">🏆 MONTHLY LEADERBOARD</div>
+  <div class="lb-filter">
+    <select id="lb-month" onchange="renderTvLeaderboard()">
+      <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+      <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+      <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+      <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+    </select>
+    <select id="lb-year" onchange="renderTvLeaderboard()"></select>
+  </div>
+  <div id="tv-leaderboard"></div>
+</div>
+
+<div id="start-overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+  <div style="color:#fff;font-size:20px;">Tap to start the display and enable voice announcements</div>
+  <button onclick="startBoard()" style="font-size:18px;padding:14px 28px;background:#f5b60e;color:#12151a;border:none;border-radius:8px;font-weight:800;cursor:pointer;">▶ Start Display</button>
+</div>
+
+<script>
+// Fixed equal weighting for this display (matches the dashboard's default 25/25/25/25 split)
+const WEIGHTS = { idle: 0.25, speed: 0.25, items: 0.25, complaints: 0.25 };
+const BEST_FULL_SCORE = 80;
+const BEST_MIN_SCORE = 75;
+const QUALIFY_RULES = {
+  morning: { picker: {full:80, min:75}, packer: {full:80, min:75} },
+  evening: { picker: {full:72, min:72}, packer: {full:65, min:60} }
+};
+
+function normalize(value, all, lowerIsBetter){
+  let min = Math.min.apply(null, all), max = Math.max.apply(null, all);
+  if (max === min) return 0.5;
+  let r = (value - min) / (max - min);
+  return lowerIsBetter ? (1 - r) : r;
+}
+
+function calculateScores(list){
+  let idles = list.map(function(p){ return p.idle; });
+  let speeds = list.map(function(p){ return p.speed; });
+  let items = list.map(function(p){ return p.items; });
+  let complaints = list.map(function(p){ return p.complaints; });
+  list.forEach(function(p){
+    let iS = normalize(p.idle, idles, true);
+    let sS = normalize(p.speed, speeds, false);
+    let itS = normalize(p.items, items, false);
+    let cS = normalize(p.complaints, complaints, true);
+    p.score = (iS*WEIGHTS.idle + sS*WEIGHTS.speed + itS*WEIGHTS.items + cS*WEIGHTS.complaints) * 100;
+  });
+}
+
+function findBest(list){ return list.length ? list.reduce(function(a,b){return b.score>a.score?b:a;}, list[0]) : null; }
+function findWorst(list){ return list.length ? list.reduce(function(a,b){return b.score<a.score?b:a;}, list[0]) : null; }
+
+function card(colorClass, title, icon, person, basePts, sub, fullScore, minScore){
+  fullScore = fullScore || BEST_FULL_SCORE;
+  minScore = minScore || BEST_MIN_SCORE;
+  if (colorClass === "green") {
+    if (!person || person.score < minScore) {
+      let reason = person ? ("top score was "+person.score.toFixed(1)+", needs "+minScore+"+") : "no data yet";
+      return "<div class='board-card green not-qualified'><span class='card-emoji-badge'>😲</span><div class='board-card-head'>"+title+"</div>"
+        + "<div class='board-card-body'><span style='color:#999;font-style:italic;'>No qualifying "+title.toLowerCase()+" — "+reason+"</span></div></div>";
+    }
+  } else if (!person) {
+    return "<div class='board-card "+colorClass+"'><span class='card-emoji-badge'>😲</span><div class='board-card-head'>"+title+"</div>"
+      + "<div class='board-card-body'><span style='color:#999;font-style:italic;'>No data yet</span></div></div>";
+  }
+  let penalized = (colorClass==="green" && person.complaints>2);
+  let partial = (colorClass==="green" && !penalized && person.score < fullScore);
+  let pts = penalized ? 1 : (partial ? 1 : basePts);
+  let subText = penalized ? "⚠ more than 2 complaints — 1 pt (penalty applied)"
+    : (partial ? "below "+fullScore+" full-score bar — 1 pt awarded" : (sub||""));
+  let emoji = colorClass === "green" ? "👏" : "😢";
+  return "<div class='board-card "+colorClass+(partial||penalized?" partial-best":"")+"'><span class='card-emoji-badge'>"+emoji+"</span><div class='board-card-head'>"+title+"</div>"
+    + "<div class='board-card-body'><div><span class='board-card-icon'>"+icon+"</span><span class='board-card-name'>"+person.name+"</span>"
+    + "<div class='board-card-sub'>"+subText+"</div></div><div class='board-card-pts'>"+pts+"</div></div></div>";
+}
+
+function pickerIcon(bgColor){
+  return "<svg width='64' height='64' viewBox='0 0 56 56'>"
+    + "<circle cx='28' cy='28' r='27' fill='"+bgColor+"' stroke='#fff' stroke-width='2'/>"
+    + "<circle cx='28' cy='18' r='7' fill='#fff'/>"
+    + "<path d='M15 39c0-7.5 5.8-13 13-13s13 5.5 13 13' fill='none' stroke='#fff' stroke-width='3.4' stroke-linecap='round'/>"
+    + "<path d='M21 34v-4a7 7 0 0 1 14 0v4' fill='none' stroke='#d9a066' stroke-width='2.6' stroke-linecap='round'/>"
+    + "<rect x='18' y='34' width='20' height='11' rx='2' fill='#d9a066'/>"
+    + "<line x1='18' y1='39.5' x2='38' y2='39.5' stroke='"+bgColor+"' stroke-width='1.6'/>"
+    + "</svg>";
+}
+function packerIcon(bgColor){
+  return "<svg width='64' height='64' viewBox='0 0 56 56'>"
+    + "<circle cx='28' cy='28' r='27' fill='"+bgColor+"' stroke='#fff' stroke-width='2'/>"
+    + "<circle cx='28' cy='17' r='7' fill='#fff'/>"
+    + "<path d='M15 38c0-7.5 5.8-13 13-13s13 5.5 13 13' fill='none' stroke='#fff' stroke-width='3.4' stroke-linecap='round'/>"
+    + "<rect x='16' y='30' width='24' height='16' rx='2' fill='#c9915a'/>"
+    + "<line x1='16' y1='38' x2='40' y2='38' stroke='#8a5a2e' stroke-width='1.8'/>"
+    + "<line x1='28' y1='30' x2='28' y2='46' stroke='#8a5a2e' stroke-width='1.8'/>"
+    + "</svg>";
+}
+
+function byShift(list, shift){ return list.filter(function(p){ return (p.shift==="evening"?"evening":"morning") === shift; }); }
+
+function shiftSectionHTML(shiftLabel, shiftKey, pickers, packers){
+  let sp = byShift(pickers, shiftKey), sk = byShift(packers, shiftKey);
+  let bestPicker = findBest(sp), worstPicker = sp.length>1 ? findWorst(sp) : null;
+  let bestPacker = findBest(sk), worstPacker = sk.length>1 ? findWorst(sk) : null;
+  let pRules = QUALIFY_RULES[shiftKey].picker, kRules = QUALIFY_RULES[shiftKey].packer;
+
+  let html = "<div class='shift-heading'>"+shiftLabel+" SHIFT</div><div class='board-grid'>";
+  html += card("green","BEST PICKER",pickerIcon("#1b6e2c"),bestPicker,3,bestPicker?("score "+bestPicker.score.toFixed(1)+(bestPicker.section?" • "+bestPicker.section:"")):"",pRules.full,pRules.min);
+  html += card("red","WORST PICKER",pickerIcon("#b5271f"),worstPicker,0,worstPicker?("score "+worstPicker.score.toFixed(1)+(worstPicker.section?" • "+worstPicker.section:"")):"");
+  html += card("green","BEST PACKER",packerIcon("#1b6e2c"),bestPacker,3,bestPacker?("score "+bestPacker.score.toFixed(1)):"",kRules.full,kRules.min);
+  html += card("red","WORST PACKER",packerIcon("#b5271f"),worstPacker,0,worstPacker?("score "+worstPacker.score.toFixed(1)):"");
+  html += "</div>";
+  return html;
+}
+
+let currentShift = "morning"; // which shift is currently on screen
+let latestPickers = [], latestPackers = [], latestHistory = [];
+
+function renderCurrentShift(){
+  let label = currentShift === "morning" ? "MORNING" : "EVENING";
+  document.getElementById("performance-board").innerHTML = shiftSectionHTML(label, currentShift, latestPickers, latestPackers);
+}
+
+function setupYearDropdown(){
+  let sel = document.getElementById("lb-year");
+  if (sel.options.length > 0) return; // only populate once
+  let thisYear = new Date().getFullYear();
+  for (let y = thisYear - 2; y <= thisYear + 1; y++) {
+    let opt = document.createElement("option");
+    opt.value = y; opt.textContent = y;
+    if (y === thisYear) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
+function renderTvLeaderboard(){
+  let month = parseInt(document.getElementById("lb-month").value);
+  let year = parseInt(document.getElementById("lb-year").value);
+  let prefix = year + "-" + String(month).padStart(2,"0");
+
+  let totals = {};
+  latestHistory.filter(function(h){ return h.date && h.date.indexOf(prefix) === 0; }).forEach(function(h){
+    totals[h.name] = (totals[h.name] || 0) + h.points;
+  });
+
+  let entries = Object.entries(totals).sort(function(a,b){ return b[1]-a[1]; });
+  let wrap = document.getElementById("tv-leaderboard");
+  if (entries.length === 0) {
+    wrap.innerHTML = "<div class='lb-empty'>No finalized records for this month yet.</div>";
+    return;
+  }
+  let max = Math.max.apply(null, entries.map(function(e){ return e[1]; })) || 1;
+  let html = "";
+  entries.slice(0, 8).forEach(function(e, idx){ // top 8 fits a TV screen cleanly
+    html += "<div class='lb-row'><div class='lb-rank'>#"+(idx+1)+"</div>"
+      + "<div class='lb-name'>"+e[0]+"</div>"
+      + "<div class='lb-bar-wrap'><div class='lb-bar' style='width:"+(e[1]/max*100).toFixed(0)+"%'></div></div>"
+      + "<div class='lb-pts'>"+e[1]+"</div></div>";
+  });
+  wrap.innerHTML = html;
+}
+
+let cachedVoices = [];
+function loadVoices(){
+  try { cachedVoices = window.speechSynthesis.getVoices() || []; } catch(e){ cachedVoices = []; }
+}
+loadVoices();
+if (window.speechSynthesis && window.speechSynthesis.onvoiceschanged !== undefined) {
+  window.speechSynthesis.onvoiceschanged = loadVoices;
+}
+
+function pickBestVoice(){
+  if (!cachedVoices || cachedVoices.length === 0) return null;
+  // Prefer a clearer/higher-quality English voice if the device offers one
+  let preferred = cachedVoices.find(function(v){ return /en/i.test(v.lang) && /google|natural|premium|enhanced/i.test(v.name); });
+  if (!preferred) preferred = cachedVoices.find(function(v){ return /en/i.test(v.lang); });
+  return preferred || cachedVoices[0];
+}
+
+function speakShift(shift){
+  try {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel(); // stop anything currently talking
+    let text = (shift === "morning" ? "Morning" : "Evening") + " shift packing performance";
+    let msg = new SpeechSynthesisUtterance(text);
+    msg.volume = 1;   // maximum volume allowed by the browser - actual loudness also depends on the TV's own volume level
+    msg.rate = 0.85;  // a bit slower reads clearer over TV speakers
+    msg.pitch = 1;
+    let voice = pickBestVoice();
+    if (voice) msg.voice = voice;
+    window.speechSynthesis.speak(msg);
+  } catch(e){}
+}
+
+function switchShift(){
+  currentShift = currentShift === "morning" ? "evening" : "morning";
+  speakShift(currentShift);
+  renderCurrentShift();
+}
+
+async function refreshData(){
+  try {
+    let res = await fetch('/api/state');
+    let data = await res.json();
+    latestPickers = (data && data.pickers) ? data.pickers : [];
+    latestPackers = (data && data.packers) ? data.packers : [];
+    latestHistory = (data && data.history) ? data.history : [];
+    if (latestPickers.length) calculateScores(latestPickers);
+    if (latestPackers.length) calculateScores(latestPackers);
+    renderCurrentShift();
+    renderTvLeaderboard();
+    document.getElementById("updated-note").textContent = "Last updated: " + new Date().toLocaleTimeString();
+  } catch(e){
+    document.getElementById("updated-note").textContent = "⚠ Can't reach server — check the dashboard is still running.";
+  }
+}
+
+function startBoard(){
+  document.getElementById("start-overlay").style.display = "none";
+  speakShift(currentShift);
+  setInterval(refreshData, 15000);        // refresh data every 15 seconds
+  setInterval(switchShift, 20 * 60 * 1000); // switch shift every 20 minutes
+}
+
+setupYearDropdown();
+refreshData(); // show data immediately behind the start overlay, even before audio is enabled
+</script>
+</body>
+</html>

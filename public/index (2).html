@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Warehouse Performance Dashboard</title>
+<style>
+  body{font-family:Arial,sans-serif;background:#f4f4f4;padding:20px;color:#222;}
+  h1{margin-bottom:4px;}
+  table{border-collapse:collapse;width:96%;margin-bottom:12px;background:#fff;}
+  th,td{padding:7px;text-align:left;border:1px solid #ccc;font-size:13px;}
+  th{background:#2c3e50;color:#fff;}
+  tr:nth-child(even){background:#f9f9f9;}
+  .alert-box{padding:10px 14px;border-radius:4px;font-weight:bold;margin-bottom:6px;width:92%;}
+  .alert-box.best{background:#eafaf0;color:#1b5e20;border-left:5px solid #43a047;}
+  .alert-box.worst{background:#fdecea;color:#b71c1c;border-left:5px solid #e53935;}
+  .highlight-row.best{background:#eafaf0!important;font-weight:bold;}
+  .highlight-row.worst{background:#fdecea!important;font-weight:bold;}
+  .cell-input{width:55px;padding:3px;border:1px solid #ccc;border-radius:3px;}
+  .name-input{width:105px;}
+  .score-cell{font-weight:bold;color:#2c3e50;}
+  .add-form{background:#fff;border:1px solid #ccc;border-radius:6px;padding:10px;width:92%;margin-bottom:16px;}
+  .add-form input{padding:5px;margin:0 6px 6px 0;border:1px solid #ccc;border-radius:3px;width:85px;}
+  button{padding:6px 12px;background:#2c3e50;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:12px;}
+  button:hover{background:#1a2634;}
+  .remove-btn{background:#e53935;padding:3px 7px;}
+  .complaint-btn{background:#f57c00;padding:3px 7px;margin-left:4px;}
+  .weights-box{background:#fff;border:1px solid #ccc;border-radius:6px;padding:10px 14px;width:92%;margin-bottom:14px;font-size:13px;}
+  .weights-box label{display:inline-block;margin-right:18px;}
+  .weights-box input[type=range]{vertical-align:middle;}
+  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:16px;width:92%;flex-wrap:wrap;}
+  .saved-note{font-size:12px;color:#4caf50;font-weight:bold;}
+  .conn-note{font-size:12px;color:#e53935;font-weight:bold;}
+  .history-row{display:flex;align-items:center;gap:10px;padding:6px 4px;border-bottom:1px solid #eee;font-size:13px;}
+  .history-name{width:130px;font-weight:600;}
+  .history-bar-wrap{flex:1;background:#eee;border-radius:4px;height:14px;overflow:hidden;}
+  .history-bar{height:100%;background:#f5b60e;}
+  .history-pts{width:34px;text-align:right;font-weight:bold;}
+  .panel{background:#fff;border:1px solid #ccc;border-radius:6px;padding:14px;width:92%;margin-bottom:20px;}
+  .panel h2{margin-top:0;font-size:16px;}
+  hr{width:92%;margin:24px 0;border:none;border-top:1px solid #ddd;}
+
+  .board-header{display:flex;align-items:center;justify-content:space-between;width:96%;margin-bottom:8px;}
+  .board-header h1{font-size:32px;margin:0;}
+  .board-icon{font-size:34px;}
+  .board-rule{width:96%;background:#fff9e6;border:1px solid #f5b60e;border-radius:6px;padding:8px 14px;font-size:13px;margin-bottom:16px;}
+  .board-rule b{color:#b71c1c;}
+  .board-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;width:96%;margin-bottom:10px;}
+  .board-card{border:1px solid #ccc;border-radius:8px;overflow:hidden;background:#fff;position:relative;}
+  .card-emoji-badge{position:absolute;top:-14px;right:-8px;font-size:32px;color:#ffcc00;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.35));z-index:2;}
+  .board-card-head{padding:10px 12px;color:#fff;font-weight:bold;font-size:14px;text-align:center;}
+  .board-card.green .board-card-head{background:#2e7d32;}
+  .board-card.red .board-card-head{background:#c62828;}
+  .board-card.yellow .board-card-head{background:#f5a623;}
+  .board-card-body{display:flex;align-items:center;justify-content:space-between;padding:14px;}
+  .board-card-icon{margin-right:8px;display:inline-flex;vertical-align:middle;}
+  .board-card-name{font-size:16px;font-weight:600;}
+  .board-card-sub{font-size:11px;color:#888;margin-top:2px;}
+  .board-card-pts{font-size:26px;font-weight:bold;}
+  .board-card.green .board-card-pts{color:#2e7d32;}
+  .board-card.red .board-card-pts{color:#c62828;}
+  .board-card.yellow .board-card-pts{color:#f5a623;}
+  .board-reset-note{width:96%;text-align:center;color:#888;font-size:12px;margin-bottom:24px;}
+  .board-card.not-qualified{opacity:0.75;}
+  .board-card.not-qualified .board-card-head{background:#555!important;}
+  .board-card.partial-best .board-card-head{background:#8a6d1a!important;}
+  .board-card.partial-best .board-card-pts{color:#f5b60e!important;}
+  .shift-heading{font-weight:800;font-size:22px;color:#c47f0a;letter-spacing:1.5px;margin:20px 0 10px;width:96%;border-bottom:2px solid #f5b60e;padding-bottom:6px;}
+</style>
+</head>
+<body>
+
+<div class="board-header">
+  <h1>📦 PACKING PERFORMANCE BOARD</h1>
+  <span class="board-icon">🏆</span>
+</div>
+<div class="board-rule"><b>⚠ Rule:</b> if a Best Picker or Packer has <b>more than 2 complaints</b> (month-to-date), <b>3 points are deducted</b>.</div>
+
+<div id="performance-board"></div>
+<div class="board-reset-note">🔄 Points are reset daily &mdash; click "Finalize &amp; Save Today's Winners" below to record today's board to the cumulative leaderboard.</div>
+
+<h1>Picker Performance</h1>
+<div class="weights-box">
+  Weights (must add to 100):
+  <label>Idle <input type="range" id="w-picker-idle" min="0" max="100" value="25" oninput="updateWeightLabel('picker-idle')"><span id="w-picker-idle-val">25</span>%</label>
+  <label>Speed <input type="range" id="w-picker-speed" min="0" max="100" value="25" oninput="updateWeightLabel('picker-speed')"><span id="w-picker-speed-val">25</span>%</label>
+  <label>Items <input type="range" id="w-picker-items" min="0" max="100" value="25" oninput="updateWeightLabel('picker-items')"><span id="w-picker-items-val">25</span>%</label>
+  <label>Complaints <input type="range" id="w-picker-complaints" min="0" max="100" value="25" oninput="updateWeightLabel('picker-complaints')"><span id="w-picker-complaints-val">25</span>%</label>
+  <button onclick="renderEverything()">Apply</button>
+</div>
+<div id="best-picker-summary"></div>
+<div id="worst-picker-summary"></div>
+<table><tr><th>Rank</th><th>Name</th><th>Section</th><th>Shift</th><th>Utilization</th><th>Idle Min</th><th>Speed</th><th>Items</th><th>Complaints</th><th>Score</th><th></th></tr>
+<tbody id="picker-rows"></tbody></table>
+<div class="add-form">
+  <input type="text" id="new-picker-name" placeholder="Name">
+  <select id="new-picker-section"><option value="dry">Dry (740)</option><option value="veg">Veg (700)</option><option value="freezer">Freezer (175)</option><option value="chiller">Chiller (800)</option></select>
+  <select id="new-picker-shift"><option value="morning">Morning</option><option value="evening">Evening</option></select>
+  <input type="number" id="new-picker-util" placeholder="Utilization" step="0.01">
+  <input type="number" id="new-picker-idle" placeholder="Idle min">
+  <input type="number" id="new-picker-speed" placeholder="Speed" step="0.01">
+  <input type="number" id="new-picker-items" placeholder="Items">
+  <button onclick="addPerson('picker')">+ Add Picker</button>
+</div>
+
+<div class="add-form">
+  <b>Import Pickers (paste from Excel / your report)</b><br>
+  <textarea id="import-picker-text" rows="4" style="width:98%;margin-top:6px;font-family:monospace;font-size:12px;" placeholder="Paste rows here, e.g.&#10;Picker&#9;Utilization&#9;Idle Time Minutes&#9;Picking Speed&#9;Total Items Picked&#10;PurityN&#9;85.06%&#9;78&#9;4.86&#9;720"></textarea><br>
+  <button onclick="importFromTextarea('picker')" style="margin-top:6px;">Import (replaces current list)</button>
+  <span style="font-size:12px;color:#888;margin-left:10px;">or upload a CSV file:</span>
+  <input type="file" id="import-picker-file" accept=".csv,.txt" onchange="importFromFile('picker', this)">
+</div>
+
+<hr>
+
+<h1>Packer Performance</h1>
+<div class="weights-box">
+  Weights (must add to 100):
+  <label>Idle <input type="range" id="w-packer-idle" min="0" max="100" value="25" oninput="updateWeightLabel('packer-idle')"><span id="w-packer-idle-val">25</span>%</label>
+  <label>Speed <input type="range" id="w-packer-speed" min="0" max="100" value="25" oninput="updateWeightLabel('packer-speed')"><span id="w-packer-speed-val">25</span>%</label>
+  <label>Items <input type="range" id="w-packer-items" min="0" max="100" value="25" oninput="updateWeightLabel('packer-items')"><span id="w-packer-items-val">25</span>%</label>
+  <label>Complaints <input type="range" id="w-packer-complaints" min="0" max="100" value="25" oninput="updateWeightLabel('packer-complaints')"><span id="w-packer-complaints-val">25</span>%</label>
+  <button onclick="renderEverything()">Apply</button>
+</div>
+<div id="best-packer-summary"></div>
+<div id="worst-packer-summary"></div>
+<table><tr><th>Rank</th><th>Name</th><th>Shift</th><th>Utilization</th><th>Idle Min</th><th>Speed</th><th>Items</th><th>Complaints</th><th>Score</th><th></th></tr>
+<tbody id="packer-rows"></tbody></table>
+<div class="add-form">
+  <input type="text" id="new-packer-name" placeholder="Name">
+  <select id="new-packer-shift"><option value="morning">Morning</option><option value="evening">Evening</option></select>
+  <input type="number" id="new-packer-util" placeholder="Utilization" step="0.01">
+  <input type="number" id="new-packer-idle" placeholder="Idle min">
+  <input type="number" id="new-packer-speed" placeholder="Speed" step="0.01">
+  <input type="number" id="new-packer-items" placeholder="Items">
+  <button onclick="addPerson('packer')">+ Add Packer</button>
+</div>
+
+<div class="add-form">
+  <b>Import Packers (paste from Excel / your report)</b><br>
+  <textarea id="import-packer-text" rows="4" style="width:98%;margin-top:6px;font-family:monospace;font-size:12px;" placeholder="Paste rows here, e.g.&#10;Packer&#9;Utilization&#9;Idle Time Minutes&#9;Packing Speed&#9;Total Items Packed&#10;jnjuguna&#9;91.71%&#9;45&#9;9.24&#9;1534"></textarea><br>
+  <button onclick="importFromTextarea('packer')" style="margin-top:6px;">Import (replaces current list)</button>
+  <span style="font-size:12px;color:#888;margin-left:10px;">or upload a CSV file:</span>
+  <input type="file" id="import-packer-file" accept=".csv,.txt" onchange="importFromFile('packer', this)">
+</div>
+
+<div class="toolbar">
+  <button onclick="finalizeDay()">Finalize &amp; Save Today's Winners</button>
+  <button onclick="exportCSV('picker')">Export Pickers CSV</button>
+  <button onclick="exportCSV('packer')">Export Packers CSV</button>
+  <button onclick="downloadFullBackup()" style="background:#1b6e2c;">💾 Download Full Backup</button>
+  <label style="font-size:12px;color:#888;">Restore: <input type="file" accept=".json" onchange="restoreFromBackup(this)" style="font-size:12px;"></label>
+  <span class="saved-note" id="saved-note"></span>
+  <span class="conn-note" id="conn-note"></span>
+</div>
+
+<div class="panel" style="border-color:#f5b60e;">
+  <h2>🗓 End of Month — Archive &amp; Reset</h2>
+  <p style="font-size:13px;color:#888;margin-top:0;">
+    Since your live numbers are month-to-date, use this once at the end of each month: it saves everyone's current
+    full numbers permanently (viewable later), records the month's Best Picker/Packer points into the Leaderboard
+    and Monthly Report, then resets Utilization/Idle/Speed/Items/Complaints back to 0 for everyone — ready for the
+    new month. Names, Sections, and Shifts are kept.
+  </p>
+  <select id="eom-month">
+    <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+    <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+    <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+    <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+  </select>
+  <input type="number" id="eom-year" style="width:80px;">
+  <button onclick="archiveAndResetMonth()" style="background:#c47f0a;">Archive This Month &amp; Reset for Next Month</button>
+  <span class="saved-note" id="eom-status"></span>
+</div>
+
+<div class="panel">
+  <h2>View a Past Month's Full Data</h2>
+  <select id="view-archive-select" onchange="renderArchiveView()">
+    <option value="">-- Select a saved month --</option>
+  </select>
+  <div id="archive-view" style="margin-top:14px;"></div>
+</div>
+
+<div class="panel">
+  <h2>Cumulative Leaderboard (Best Picker/Packer earn 3 pts/day, complaint on Best = 0 that day)</h2>
+  <div id="leaderboard"></div>
+</div>
+
+<div class="panel">
+  <h2>Monthly Report</h2>
+  <div style="margin-bottom:12px;">
+    <select id="report-month">
+      <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+      <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+      <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+      <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+    </select>
+    <input type="number" id="report-year" style="width:80px;" value="2026">
+    <button onclick="renderMonthlyReport()">Show Report</button>
+    <button onclick="exportMonthlyReportCSV()">Export CSV</button>
+  </div>
+  <div id="monthly-report"></div>
+</div>
+
+<div class="panel">
+  <h2>Backfill Past Records</h2>
+  <p style="font-size:13px;color:#888;margin-top:0;">Add records for days before you started using this dashboard, so they show up correctly in the Monthly Report and Leaderboard above.</p>
+
+  <b style="font-size:13px;">Add one record</b><br>
+  <div style="margin:8px 0 16px;">
+    <input type="month" id="bf-date">
+    <input type="text" id="bf-name" placeholder="Name" style="width:110px;">
+    <select id="bf-role"><option value="picker">Picker</option><option value="packer">Packer</option></select>
+    <select id="bf-shift"><option value="morning">Morning</option><option value="evening">Evening</option></select>
+    <input type="number" id="bf-points" placeholder="Points" style="width:70px;">
+    <button onclick="addBackfillRecord()">+ Add Record</button>
+  </div>
+
+  <b style="font-size:13px;">Or paste many at once</b>
+  <div style="font-size:12px;color:#888;margin-bottom:6px;">Format: Date,Name,Role,Shift,Points — one per line. Date can be a full day (<code>2026-01-15</code>) or just a month (<code>2026-01</code>) if that's all you know.</div>
+  <textarea id="bf-bulk-text" rows="5" style="width:98%;font-family:monospace;font-size:12px;" placeholder="2026-01-15,EdwinD,picker,morning,3
+2026-01-15,jnjuguna,packer,morning,3
+2026-01,PurityN,picker,evening,1"></textarea><br>
+  <button onclick="addBackfillBulk()" style="margin-top:6px;">Import All Pasted Records</button>
+  <span class="saved-note" id="bf-status"></span>
+</div>
+
+<div class="panel">
+  <h2>Backfill From Raw Daily Numbers (auto-scores each day for you)</h2>
+  <p style="font-size:13px;color:#888;margin-top:0;">
+    Use this if you have actual utilization/idle/speed/items numbers for past days, rather than already knowing who won.
+    This calculates the score for each person exactly like the live dashboard does, finds the Best Picker/Packer for
+    each Date + Role + Shift group, and records the correct points automatically.
+  </p>
+  <div style="font-size:12px;color:#888;margin-bottom:6px;">
+    <b>Required header row</b>, columns in any order: <code>Date, Role, Name, Shift, Utilization, Idle, Speed, Items</code>
+    (Complaints and Section are optional here — leave Complaints out entirely if it's in a separate list below).
+    Role must say "picker" or "packer". One row per person per day.
+  </div>
+  <textarea id="bf-raw-text" rows="8" style="width:98%;font-family:monospace;font-size:12px;" placeholder="Date,Role,Name,Section,Shift,Utilization,Idle,Speed,Items
+2026-06-02,picker,EdwinD,veg,morning,82.5,90,5.2,700
+2026-06-02,picker,PaulN,dry,morning,74.1,140,3.8,520
+2026-06-02,packer,jnjuguna,,morning,91.0,60,9.1,1400
+2026-06-03,picker,EdwinD,veg,morning,79.8,110,4.9,650"></textarea>
+
+  <div style="margin-top:16px;font-size:13px;font-weight:bold;">Complaints (optional, separate list)</div>
+  <div style="font-size:12px;color:#888;margin-bottom:6px;">
+    Header row: <code>Date, Name, Complaints</code> — matched automatically to the person above by Date + Name.
+    Anyone not listed here simply stays at 0 complaints for that day.
+  </div>
+  <textarea id="bf-complaints-text" rows="4" style="width:98%;font-family:monospace;font-size:12px;" placeholder="Date,Name,Complaints
+2026-06-02,PaulN,1
+2026-06-05,EdwinD,3"></textarea><br>
+
+  <button onclick="processRawHistoricalBulk()" style="margin-top:10px;">Score &amp; Import All Days</button>
+  <span class="saved-note" id="bf-raw-status"></span>
+</div>
+
+<script>
+const SECTION_TARGETS = { dry:740, veg:700, freezer:175, chiller:800 };
+const BEST_FULL_SCORE = 80;   // default (Morning) - score at/above this = full Best crown, 3 points
+const BEST_MIN_SCORE = 75;    // default (Morning) - score in [75, 80) = still Best, 1 point; below = no Best
+const QUALIFY_RULES = {
+  morning: { picker: {full:80, min:75}, packer: {full:80, min:75} },
+  evening: { picker: {full:72, min:72}, packer: {full:65, min:60} } // evening picker has no partial band (hard cutoff)
+};
+const PACKER_TARGET = 900;
+
+let defaultPickers = [
+  { name:"PurityN", utilization:85.06, idle:78, speed:4.86, items:720, complaints:0, section:"dry", shift:"morning" },
+  { name:"pmacharia", utilization:80.00, idle:195, speed:2.97, items:771, complaints:0, section:"dry", shift:"morning" },
+  { name:"PaulN", utilization:78.88, idle:113, speed:2.59, items:364, complaints:0, section:"veg", shift:"morning" },
+  { name:"EdwinD", utilization:77.87, idle:116, speed:4.19, items:664, complaints:0, section:"veg", shift:"morning" },
+  { name:"AkinyiE", utilization:77.43, idle:118, speed:4.10, items:636, complaints:0, section:"freezer", shift:"morning" },
+  { name:"LindaL", utilization:76.18, idle:133, speed:4.33, items:585, complaints:0, section:"chiller", shift:"morning" },
+  { name:"divinah", utilization:74.28, idle:144, speed:5.84, items:809, complaints:0, section:"dry", shift:"morning" },
+  { name:"ronald", utilization:73.57, idle:127, speed:5.66, items:668, complaints:0, section:"dry", shift:"evening" },
+  { name:"BrigitA", utilization:69.12, idle:161, speed:4.88, items:585, complaints:0, section:"veg", shift:"evening" },
+  { name:"lucianjeri", utilization:65.47, idle:173, speed:5.73, items:605, complaints:0, section:"veg", shift:"evening" },
+  { name:"EricM", utilization:63.11, idle:207, speed:4.54, items:531, complaints:0, section:"freezer", shift:"evening" },
+  { name:"CaroliineW", utilization:61.79, idle:207, speed:6.01, items:671, complaints:0, section:"chiller", shift:"evening" },
+  { name:"KamauG", utilization:61.13, idle:202, speed:2.79, items:296, complaints:0, section:"dry", shift:"evening" }
+];
+let defaultPackers = [
+  { name:"jnjuguna", utilization:91.71, idle:45, speed:9.24, items:1534, complaints:0, shift:"morning" },
+  { name:"elizabeth", utilization:86.09, idle:76, speed:7.23, items:1136, complaints:0, shift:"morning" },
+  { name:"KwambokaA", utilization:85.37, idle:77, speed:7.38, items:1103, complaints:0, shift:"morning" },
+  { name:"TeresiaW", utilization:83.63, idle:83, speed:7.31, items:1031, complaints:0, shift:"evening" },
+  { name:"EstherN", utilization:77.69, idle:122, speed:9.00, items:1273, complaints:0, shift:"evening" },
+  { name:"mirriam", utilization:77.19, idle:108, speed:7.08, items:973, complaints:0, shift:"evening" },
+  { name:"mmbugua", utilization:61.72, idle:200, speed:9.12, items:980, complaints:0, shift:"evening" }
+];
+
+// ---- These now live only in memory; the SERVER is the real source of truth ----
+let pickers = [];
+let packers = [];
+let leaderboard = {};
+let history = []; // dated award records, e.g. {date:"2026-07-17", name, role, shift, points}
+let monthlyArchives = []; // full month-end snapshots, e.g. {month:"2026-07", savedAt, pickers:[...], packers:[...]}
+
+// ---- BACKEND CONNECTION: load from the server when the page opens ----
+async function loadFromServer(){
+  try {
+    let res = await fetch('/api/state');
+    let data = await res.json();
+    if (data) {
+      pickers = data.pickers || [];
+      packers = data.packers || [];
+      leaderboard = data.leaderboard || {};
+      history = data.history || [];
+      monthlyArchives = data.monthlyArchives || [];
+    } else {
+      // Nothing saved on the server yet - start with the defaults
+      pickers = defaultPickers;
+      packers = defaultPackers;
+      leaderboard = {};
+      history = [];
+      monthlyArchives = [];
+    }
+    document.getElementById("conn-note").textContent = "";
+  } catch (e) {
+    document.getElementById("conn-note").textContent = "⚠ Can't reach server - is 'node server.js' running?";
+    pickers = defaultPickers;
+    packers = defaultPackers;
+  }
+}
+
+// ---- BACKEND CONNECTION: send the current data to the server to save ----
+async function persistAll(){
+  try {
+    await fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pickers: pickers, packers: packers, leaderboard: leaderboard, history: history, monthlyArchives: monthlyArchives })
+    });
+    let n = document.getElementById("saved-note");
+    n.textContent = "Saved to server ✓";
+    setTimeout(function(){ n.textContent = ""; }, 1500);
+  } catch (e) {
+    document.getElementById("conn-note").textContent = "⚠ Could not save - server not running?";
+  }
+}
+
+// ---- IMPORT: turn pasted or uploaded table data into picker/packer objects ----
+function parseImportText(text){
+  let lines = text.trim().split(/\r?\n/).filter(function(l){ return l.trim() !== ""; });
+  if (lines.length === 0) return [];
+
+  // Figure out whether columns are separated by tabs (typical when pasting from Excel) or commas (CSV)
+  let delim = lines[0].indexOf('\t') >= 0 ? '\t' : ',';
+  let rows = lines.map(function(l){ return l.split(delim).map(function(c){ return c.trim(); }); });
+
+  // Check if the first row looks like a header (contains words, not numbers)
+  let firstRow = rows[0];
+  let looksLikeHeader = isNaN(parseFloat(firstRow[1]));
+
+  let colMap, dataRows;
+  if (looksLikeHeader) {
+    // Match each header word to a field, based on keywords - handles different report layouts automatically
+    colMap = firstRow.map(function(h){
+      let low = h.toLowerCase();
+      if (low.indexOf('order') >= 0) return null; // ignore "Orders Done/Packed" columns
+      if (low.indexOf('util') >= 0) return 'utilization';
+      if (low.indexOf('idle') >= 0) return 'idle';
+      if (low.indexOf('speed') >= 0) return 'speed';
+      if (low.indexOf('item') >= 0) return 'items';
+      if (low.indexOf('complaint') >= 0) return 'complaints';
+      if (low.indexOf('section') >= 0) return 'section';
+      if (low.indexOf('shift') >= 0) return 'shift';
+      if (low.indexOf('name') >= 0 || low.indexOf('picker') >= 0 || low.indexOf('packer') >= 0) return 'name';
+      return null; // anything else unrecognized is ignored
+    });
+    dataRows = rows.slice(1);
+  } else {
+    // No header found - assume a fixed column order
+    colMap = ['name', 'utilization', 'idle', 'speed', 'items', 'complaints'];
+    dataRows = rows;
+  }
+
+  let result = [];
+  dataRows.forEach(function(r){
+    if (r.length < 2) return;
+    let person = { name: "", utilization: 0, idle: 0, speed: 0, items: 0, complaints: 0, section: "", shift: "" };
+    colMap.forEach(function(field, idx){
+      if (!field || idx >= r.length) return;
+      let raw = r[idx].replace('%', '').trim();
+      if (field === 'name') person.name = raw;
+      else if (field === 'section') person.section = raw.toLowerCase();
+      else if (field === 'shift') person.shift = raw.toLowerCase();
+      else person[field] = parseFloat(raw) || 0;
+    });
+    if (person.name) result.push(person);
+  });
+  return result;
+}
+
+function importFromTextarea(kind){
+  let text = document.getElementById("import-" + kind + "-text").value;
+  let parsed = parseImportText(text);
+  if (parsed.length === 0) {
+    alert("Couldn't find any valid rows. Make sure each row has a name plus at least one number.");
+    return;
+  }
+
+  // Shift, Complaints, and Name are ALWAYS locked to whatever's already saved for a matched
+  // person - import can never change them, no matter what the pasted data contains.
+  // A name that doesn't match anyone existing is treated as brand new and gets added.
+  let currentList = kind === "picker" ? pickers : packers;
+  parsed.forEach(function(np){
+    let existing = currentList.find(function(p){ return p.name.toLowerCase() === np.name.toLowerCase(); });
+    if (existing) {
+      np.name = existing.name;
+      np.complaints = existing.complaints;
+      np.shift = existing.shift || "morning";
+      if (!np.section) np.section = existing.section || "dry";
+    } else {
+      np.complaints = 0;
+      np.shift = "morning";
+      if (!np.section) np.section = "dry";
+    }
+  });
+
+  if (!confirm("Import " + parsed.length + " " + kind + "(s)? This will REPLACE the current list (Name, Shift and Complaints are never touched by import for matching people).")) return;
+
+  if (kind === "picker") pickers = parsed; else packers = parsed;
+  document.getElementById("import-" + kind + "-text").value = "";
+  persistAll();
+  renderEverything();
+}
+
+function importFromFile(kind, inputEl){
+  let file = inputEl.files[0];
+  if (!file) return;
+  let reader = new FileReader();
+  reader.onload = function(e){
+    let parsed = parseImportText(e.target.result);
+    if (parsed.length === 0) {
+      alert("Couldn't find any valid rows in that file.");
+      return;
+    }
+
+    // Shift, Complaints, and Name are ALWAYS locked to whatever's already saved for a matched person
+    let currentList = kind === "picker" ? pickers : packers;
+    parsed.forEach(function(np){
+      let existing = currentList.find(function(p){ return p.name.toLowerCase() === np.name.toLowerCase(); });
+      if (existing) {
+        np.name = existing.name;
+        np.complaints = existing.complaints;
+        np.shift = existing.shift || "morning";
+        if (!np.section) np.section = existing.section || "dry";
+      } else {
+        np.complaints = 0;
+        np.shift = "morning";
+        if (!np.section) np.section = "dry";
+      }
+    });
+
+    if (!confirm("Import " + parsed.length + " " + kind + "(s)? This will REPLACE the current list (Name, Shift and Complaints are never touched by import for matching people).")) return;
+    if (kind === "picker") pickers = parsed; else packers = parsed;
+    persistAll();
+    renderEverything();
+  };
+  reader.readAsText(file);
+  inputEl.value = ""; // reset so the same file can be re-uploaded later if needed
+}
+
+function updateWeightLabel(id){
+  document.getElementById("w-"+id+"-val").textContent = document.getElementById("w-"+id).value;
+}
+
+function getWeights(kind){
+  let idle = parseFloat(document.getElementById("w-"+kind+"-idle").value);
+  let speed = parseFloat(document.getElementById("w-"+kind+"-speed").value);
+  let items = parseFloat(document.getElementById("w-"+kind+"-items").value);
+  let complaints = parseFloat(document.getElementById("w-"+kind+"-complaints").value);
+  let total = idle+speed+items+complaints || 1;
+  return {idle:idle/total, speed:speed/total, items:items/total, complaints:complaints/total};
+}
+
+function normalize(value, all, lowerIsBetter){
+  let min = Math.min.apply(null, all), max = Math.max.apply(null, all);
+  if (max === min) return 0.5;
+  let r = (value-min)/(max-min);
+  return lowerIsBetter ? (1-r) : r;
+}
+
+function calculateScores(list, w){
+  let idles = list.map(function(p){return p.idle;});
+  let speeds = list.map(function(p){return p.speed;});
+  let items = list.map(function(p){return p.items;});
+  let complaints = list.map(function(p){return p.complaints;});
+  list.forEach(function(p){
+    let iS = normalize(p.idle, idles, true);
+    let sS = normalize(p.speed, speeds, false);
+    let itS = normalize(p.items, items, false);
+    let cS = normalize(p.complaints, complaints, true);
+    p.score = (iS*w.idle + sS*w.speed + itS*w.items + cS*w.complaints) * 100;
+  });
+}
+
+function addPerson(kind){
+  let n=document.getElementById("new-"+kind+"-name"), u=document.getElementById("new-"+kind+"-util");
+  let idl=document.getElementById("new-"+kind+"-idle"), sp=document.getElementById("new-"+kind+"-speed"), it=document.getElementById("new-"+kind+"-items");
+  let shiftEl = document.getElementById("new-"+kind+"-shift");
+  let sectionEl = kind==="picker" ? document.getElementById("new-picker-section") : null;
+  let name=n.value.trim(), util=parseFloat(u.value), idle=parseFloat(idl.value), speed=parseFloat(sp.value), itemsVal=parseFloat(it.value);
+  if(name===""||[util,idle,speed,itemsVal].some(isNaN)){ alert("Fill in all fields first."); return; }
+  let newPerson = {name:name, utilization:util, idle:idle, speed:speed, items:itemsVal, complaints:0, shift: shiftEl.value};
+  if (kind==="picker") newPerson.section = sectionEl.value;
+  (kind==="picker"?pickers:packers).push(newPerson);
+  [n,u,idl,sp,it].forEach(function(el){el.value="";});
+  persistAll(); renderEverything();
+}
+
+function removePerson(kind, index){
+  (kind==="picker"?pickers:packers).splice(index,1);
+  persistAll(); renderEverything();
+}
+
+function updateField(kind, index, field, val){
+  let list = kind==="picker"?pickers:packers;
+  let textFields = ["name", "section", "shift"];
+  list[index][field] = textFields.indexOf(field) >= 0 ? val : parseFloat(val);
+  persistAll(); renderEverything();
+}
+
+function logComplaint(kind, index){
+  let list = kind==="picker"?pickers:packers;
+  list[index].complaints += 1;
+  persistAll(); renderEverything();
+}
+
+function renderGroup(list, rowsId, bestId, worstId, label, kind){
+  if(list.length===0){
+    document.getElementById(rowsId).innerHTML="";
+    document.getElementById(bestId).innerHTML="";
+    document.getElementById(worstId).innerHTML="No "+label+"s added yet.";
+    return;
+  }
+  let w = getWeights(kind);
+  calculateScores(list, w);
+
+  let best=list[0], worst=list[0];
+  for(let i=0;i<list.length;i++){
+    if(list[i].score>best.score) best=list[i];
+    if(list[i].score<worst.score) worst=list[i];
+  }
+
+  let ranked = list.slice().sort(function(a,b){return b.score-a.score;});
+  let output="";
+  for(let rank=0; rank<ranked.length; rank++){
+    let p=ranked[rank], i=list.indexOf(p);
+    let rowClass = p.name===best.name ? "highlight-row best" : (p.name===worst.name ? "highlight-row worst" : "");
+    let medal = rank===0?"🥇 ":rank===1?"🥈 ":rank===2?"🥉 ":"";
+    let target = kind==="picker" ? (SECTION_TARGETS[p.section]||"?") : PACKER_TARGET;
+    output += "<tr class='"+rowClass+"'>";
+    output += "<td>"+medal+"#"+(rank+1)+"</td>";
+    output += "<td><input class='cell-input name-input' value='"+p.name+"' onchange=\"updateField('"+kind+"',"+i+",'name',this.value)\"></td>";
+    if (kind==="picker") {
+      output += "<td><select onchange=\"updateField('picker',"+i+",'section',this.value)\">"
+        + "<option value='dry'"+(p.section==='dry'?' selected':'')+">Dry (740)</option>"
+        + "<option value='veg'"+(p.section==='veg'?' selected':'')+">Veg (700)</option>"
+        + "<option value='freezer'"+(p.section==='freezer'?' selected':'')+">Freezer (175)</option>"
+        + "<option value='chiller'"+(p.section==='chiller'?' selected':'')+">Chiller (800)</option>"
+        + "</select></td>";
+    }
+    output += "<td><select onchange=\"updateField('"+kind+"',"+i+",'shift',this.value)\">"
+      + "<option value='morning'"+(p.shift==='morning'?' selected':'')+">Morning</option>"
+      + "<option value='evening'"+(p.shift==='evening'?' selected':'')+">Evening</option>"
+      + "</select></td>";
+    output += "<td><input class='cell-input' type='number' step='0.01' value='"+p.utilization+"' onchange=\"updateField('"+kind+"',"+i+",'utilization',this.value)\"></td>";
+    output += "<td><input class='cell-input' type='number' value='"+p.idle+"' onchange=\"updateField('"+kind+"',"+i+",'idle',this.value)\"></td>";
+    output += "<td><input class='cell-input' type='number' step='0.01' value='"+p.speed+"' onchange=\"updateField('"+kind+"',"+i+",'speed',this.value)\"></td>";
+    output += "<td><input class='cell-input' type='number' value='"+p.items+"' onchange=\"updateField('"+kind+"',"+i+",'items',this.value)\"><div style='font-size:10px;color:#888;'>target "+target+"</div></td>";
+    output += "<td><input class='cell-input' type='number' min='0' step='1' value='"+p.complaints+"' onchange=\"updateField('"+kind+"',"+i+",'complaints',this.value)\"> <button class='complaint-btn' onclick=\"logComplaint('"+kind+"',"+i+")\">+1</button></td>";
+    output += "<td class='score-cell'>"+p.score.toFixed(1)+"</td>";
+    output += "<td><button class='remove-btn' onclick=\"removePerson('"+kind+"',"+i+")\">&times;</button></td>";
+    output += "</tr>";
+  }
+  document.getElementById(rowsId).innerHTML = output;
+  if (best.score >= BEST_FULL_SCORE) {
+    document.getElementById(bestId).innerHTML = "<div class='alert-box best'>Best "+label+": "+best.name+" (score "+best.score.toFixed(1)+" • 3 pts)</div>";
+  } else if (best.score >= BEST_MIN_SCORE) {
+    document.getElementById(bestId).innerHTML = "<div class='alert-box' style='background:#3a3410;color:#f5b60e;border-left-color:#f5b60e;'>Best "+label+": "+best.name+" (score "+best.score.toFixed(1)+" • 1 pt, below "+BEST_FULL_SCORE+")</div>";
+  } else {
+    document.getElementById(bestId).innerHTML = "<div class='alert-box' style='background:#333;color:#ccc;border-left-color:#777;'>No qualifying Best "+label+" today — top score was "+best.score.toFixed(1)+" (needs "+BEST_MIN_SCORE+"+)</div>";
+  }
+  document.getElementById(worstId).innerHTML = "<div class='alert-box worst'>Worst "+label+": "+worst.name+" (score "+worst.score.toFixed(1)+")</div>";
+}
+
+function renderEverything(){
+  renderGroup(pickers, "picker-rows", "best-picker-summary", "worst-picker-summary", "picker", "picker");
+  renderGroup(packers, "packer-rows", "best-packer-summary", "worst-packer-summary", "packer", "packer");
+  if (typeof renderPerformanceBoard === "function") renderPerformanceBoard();
+}
+
+function renderLeaderboard(){
+  let entries = Object.entries(leaderboard).sort(function(a,b){return b[1]-a[1];});
+  let wrap = document.getElementById("leaderboard");
+  if(entries.length===0){ wrap.innerHTML="<div style='color:#888;font-size:13px;'>Finalize a day to start the leaderboard.</div>"; return; }
+  let max = Math.max.apply(null, entries.map(function(e){return e[1];})) || 1;
+  let html="";
+  entries.forEach(function(e, idx){
+    html += "<div class='history-row'><div style='width:26px;color:#888;'>#"+(idx+1)+"</div>"
+      + "<div class='history-name'>"+e[0]+"</div>"
+      + "<div class='history-bar-wrap'><div class='history-bar' style='width:"+(e[1]/max*100).toFixed(0)+"%'></div></div>"
+      + "<div class='history-pts'>"+e[1]+"</div></div>";
+  });
+  wrap.innerHTML = html;
+}
+
+// ---- Backfill: add a past record directly into history + the running leaderboard ----
+function addBackfillRecord(){
+  let monthVal = document.getElementById("bf-date").value; // comes back as "YYYY-MM" from a month picker
+  let date = monthVal ? monthVal + "-01" : ""; // stored as the 1st of that month, so it still matches "YYYY-MM" filtering everywhere else
+  let name = document.getElementById("bf-name").value.trim();
+  let role = document.getElementById("bf-role").value;
+  let shift = document.getElementById("bf-shift").value;
+  let points = parseFloat(document.getElementById("bf-points").value);
+
+  if (!date || !name || isNaN(points)) {
+    alert("Please fill in month, name, and points.");
+    return;
+  }
+
+  // Guard against double-counting: if an identical record already exists, replace it instead of adding on top
+  let dupExists = history.some(function(h){ return h.date===date && h.role===role && h.shift===shift && h.name.toLowerCase()===name.toLowerCase(); });
+  if (dupExists) {
+    if (!confirm("A record already exists for " + name + " on " + date + " (" + role + ", " + shift + "). Replace it with this new value instead of adding on top?")) return;
+    history.filter(function(h){ return h.date===date && h.role===role && h.shift===shift && h.name.toLowerCase()===name.toLowerCase(); }).forEach(function(h){
+      leaderboard[h.name] = (leaderboard[h.name] || 0) - h.points;
+    });
+    history = history.filter(function(h){ return !(h.date===date && h.role===role && h.shift===shift && h.name.toLowerCase()===name.toLowerCase()); });
+  }
+
+  history.push({date:date, name:name, role:role, shift:shift, points:points});
+  leaderboard[name] = (leaderboard[name] || 0) + points;
+
+  document.getElementById("bf-name").value = "";
+  document.getElementById("bf-points").value = "";
+
+  persistAll();
+  renderLeaderboard();
+  renderMonthlyReport();
+
+  let n = document.getElementById("bf-status");
+  n.textContent = "Added ✓";
+  setTimeout(function(){ n.textContent = ""; }, 1500);
+}
+
+function addBackfillBulk(){
+  let text = document.getElementById("bf-bulk-text").value.trim();
+  if (!text) return;
+  let lines = text.split(/\r?\n/).filter(function(l){ return l.trim() !== ""; });
+  let added = 0, replaced = 0, skipped = 0;
+
+  lines.forEach(function(line){
+    let parts = line.split(",").map(function(p){ return p.trim(); });
+    if (parts.length < 5) { skipped++; return; }
+    let date = parts[0], name = parts[1], role = parts[2].toLowerCase(), shift = parts[3].toLowerCase(), points = parseFloat(parts[4]);
+    if (!date || !name || isNaN(points)) { skipped++; return; }
+
+    // Guard against double-counting: replace any existing identical record instead of stacking on top
+    let existing = history.filter(function(h){ return h.date===date && h.role===role && h.shift===shift && h.name.toLowerCase()===name.toLowerCase(); });
+    if (existing.length) {
+      existing.forEach(function(h){ leaderboard[h.name] = (leaderboard[h.name] || 0) - h.points; });
+      history = history.filter(function(h){ return !(h.date===date && h.role===role && h.shift===shift && h.name.toLowerCase()===name.toLowerCase()); });
+      replaced++;
+    } else {
+      added++;
+    }
+
+    history.push({date:date, name:name, role:role, shift:shift, points:points});
+    leaderboard[name] = (leaderboard[name] || 0) + points;
+  });
+
+  document.getElementById("bf-bulk-text").value = "";
+  persistAll();
+  renderLeaderboard();
+  renderMonthlyReport();
+
+  let n = document.getElementById("bf-status");
+  n.textContent = "Added " + added + " new, replaced " + replaced + " existing" + (skipped ? (", skipped " + skipped + " bad line(s)") : "") + " ✓";
+  setTimeout(function(){ n.textContent = ""; }, 3500);
+}
+
+// ---- Backfill from raw numbers: parses a multi-day, multi-person paste and scores each day itself ----
+function parseHistoricalText(text){
+  let lines = text.trim().split(/\r?\n/).filter(function(l){ return l.trim() !== ""; });
+  if (lines.length === 0) return [];
+  let delim = lines[0].indexOf('\t') >= 0 ? '\t' : ',';
+  let rows = lines.map(function(l){ return l.split(delim).map(function(c){ return c.trim(); }); });
+  let firstRow = rows[0];
+
+  let colMap = firstRow.map(function(h){
+    let low = h.toLowerCase();
+    if (low.indexOf('date') >= 0) return 'date';
+    if (low.indexOf('role') >= 0) return 'role';
+    if (low.indexOf('order') >= 0) return null;
+    if (low.indexOf('util') >= 0) return 'utilization';
+    if (low.indexOf('idle') >= 0) return 'idle';
+    if (low.indexOf('speed') >= 0) return 'speed';
+    if (low.indexOf('item') >= 0) return 'items';
+    if (low.indexOf('complaint') >= 0) return 'complaints';
+    if (low.indexOf('section') >= 0) return 'section';
+    if (low.indexOf('shift') >= 0) return 'shift';
+    if (low.indexOf('name') >= 0 || low.indexOf('picker') >= 0 || low.indexOf('packer') >= 0) return 'name';
+    return null;
+  });
+
+  let dataRows = rows.slice(1);
+  let result = [];
+  dataRows.forEach(function(r){
+    if (r.length < 3) return;
+    let rec = { date:"", role:"", name:"", section:"", shift:"morning", utilization:0, idle:0, speed:0, items:0, complaints:0 };
+    colMap.forEach(function(field, idx){
+      if (!field || idx >= r.length) return;
+      let raw = r[idx].replace('%','').trim();
+      if (field === 'date' || field === 'name') rec[field] = raw;
+      else if (field === 'role' || field === 'shift' || field === 'section') rec[field] = raw.toLowerCase();
+      else rec[field] = parseFloat(raw) || 0;
+    });
+    rec.role = rec.role === 'packer' ? 'packer' : 'picker';
+    rec.shift = rec.shift === 'evening' ? 'evening' : 'morning';
+    if (rec.date && rec.name) result.push(rec);
+  });
+  return result;
+}
+
+function parseComplaintsText(text){
+  let lines = text.trim().split(/\r?\n/).filter(function(l){ return l.trim() !== ""; });
+  if (lines.length === 0) return {};
+  let delim = lines[0].indexOf('\t') >= 0 ? '\t' : ',';
+  let rows = lines.map(function(l){ return l.split(delim).map(function(c){ return c.trim(); }); });
+  let firstRow = rows[0].map(function(h){ return h.toLowerCase(); });
+  let looksLikeHeader = firstRow.some(function(h){ return h.indexOf('date')>=0 || h.indexOf('name')>=0 || h.indexOf('complaint')>=0; });
+  let dataRows = looksLikeHeader ? rows.slice(1) : rows;
+
+  let map = {}; // "date|name-lowercase" -> complaints count
+  dataRows.forEach(function(r){
+    if (r.length < 3) return;
+    let date = r[0].trim(), name = r[1].trim(), complaints = parseFloat(r[2]) || 0;
+    if (!date || !name) return;
+    map[date + "|" + name.toLowerCase()] = complaints;
+  });
+  return map;
+}
+
+function processRawHistoricalBulk(){
+  let text = document.getElementById("bf-raw-text").value;
+  let complaintsMap = parseComplaintsText(document.getElementById("bf-complaints-text").value);
+  let records = parseHistoricalText(text);
+  if (records.length === 0) {
+    alert("No valid rows found. Make sure you included a header row and each row has at least a Date, Role, and Name.");
+    return;
+  }
+
+  // Merge in complaints from the separate list, matched by Date + Name
+  records.forEach(function(r){
+    let key = r.date + "|" + r.name.toLowerCase();
+    if (complaintsMap.hasOwnProperty(key)) r.complaints = complaintsMap[key];
+  });
+
+  // Group by Date + Role + Shift, since Best is determined within that exact group
+  let groups = {};
+  records.forEach(function(r){
+    let key = r.date + "|" + r.role + "|" + r.shift;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(r);
+  });
+
+  let equalWeights = { idle:0.25, speed:0.25, items:0.25, complaints:0.25 };
+  let daysTouched = {};
+  let groupCount = 0;
+
+  Object.keys(groups).forEach(function(key){
+    let group = groups[key];
+    let parts = key.split("|");
+    let date = parts[0], role = parts[1], shift = parts[2];
+
+    // Remove any existing record for this exact date+role+shift so re-processing corrects, not duplicates
+    history.filter(function(h){ return h.date===date && h.role===role && h.shift===shift; }).forEach(function(h){
+      leaderboard[h.name] = (leaderboard[h.name] || 0) - h.points;
+    });
+    history = history.filter(function(h){ return !(h.date===date && h.role===role && h.shift===shift); });
+
+    calculateScores(group, equalWeights);
+    let best = group.reduce(function(a,b){ return b.score > a.score ? b : a; }, group[0]);
+    let rules = QUALIFY_RULES[shift][role];
+    let pts = pointsFor(best, rules);
+
+    history.push({date:date, name:best.name, role:role, shift:shift, points:pts});
+    leaderboard[best.name] = (leaderboard[best.name] || 0) + pts;
+    daysTouched[date] = true;
+    groupCount++;
+  });
+
+  document.getElementById("bf-raw-text").value = "";
+  document.getElementById("bf-complaints-text").value = "";
+  persistAll();
+  renderLeaderboard();
+  renderMonthlyReport();
+
+  let n = document.getElementById("bf-raw-status");
+  n.textContent = "Scored & imported " + groupCount + " shift/role group(s) across " + Object.keys(daysTouched).length + " day(s) ✓";
+  setTimeout(function(){ n.textContent = ""; }, 4000);
+}
+
+function getMonthlyTotals(month, year){
+  let prefix = year + "-" + String(month).padStart(2,"0"); // e.g. "2026-07"
+  let filtered = history.filter(function(h){ return h.date.indexOf(prefix) === 0; });
+  let totals = {}; // name -> {points, awards}
+  filtered.forEach(function(h){
+    if (!totals[h.name]) totals[h.name] = {points:0, awards:0};
+    totals[h.name].points += h.points;
+    totals[h.name].awards += 1;
+  });
+  return { totals: totals, records: filtered };
+}
+
+function renderMonthlyReport(){
+  let month = parseInt(document.getElementById("report-month").value);
+  let year = parseInt(document.getElementById("report-year").value);
+  let result = getMonthlyTotals(month, year);
+  let entries = Object.entries(result.totals).sort(function(a,b){ return b[1].points - a[1].points; });
+  let wrap = document.getElementById("monthly-report");
+
+  if (entries.length === 0) {
+    wrap.innerHTML = "<div style='color:#888;font-size:13px;'>No finalized records for this month yet.</div>";
+    return;
+  }
+
+  let max = Math.max.apply(null, entries.map(function(e){ return e[1].points; })) || 1;
+  let html = "";
+  entries.forEach(function(e, idx){
+    let name = e[0], data = e[1];
+    html += "<div class='history-row'><div style='width:26px;color:#888;'>#"+(idx+1)+"</div>"
+      + "<div class='history-name'>"+name+"</div>"
+      + "<div class='history-bar-wrap'><div class='history-bar' style='width:"+(data.points/max*100).toFixed(0)+"%'></div></div>"
+      + "<div class='history-pts'>"+data.points+"</div>"
+      + "<div style='width:70px;text-align:right;color:#888;font-size:12px;'>"+data.awards+" award(s)</div></div>";
+  });
+  wrap.innerHTML = html;
+}
+
+function exportMonthlyReportCSV(){
+  let month = parseInt(document.getElementById("report-month").value);
+  let year = parseInt(document.getElementById("report-year").value);
+  let result = getMonthlyTotals(month, year);
+  let rows = [["Date","Name","Role","Shift","Points"]];
+  result.records.sort(function(a,b){ return a.date.localeCompare(b.date); }).forEach(function(h){
+    rows.push([h.date, h.name, h.role, h.shift, h.points]);
+  });
+  let csv = rows.map(function(r){ return r.join(","); }).join("\n");
+  let blob = new Blob([csv], {type:"text/csv"});
+  let url = URL.createObjectURL(blob);
+  let a = document.createElement("a");
+  a.href = url;
+  a.download = "monthly_report_" + year + "-" + String(month).padStart(2,"0") + ".csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---- Shared: how many points a Best Picker/Packer earns given their score and shift rules ----
+function pointsFor(person, rules){
+  if (!person) return 0;
+  if (person.score < rules.min) return 0; // doesn't even qualify as Best
+  if (person.complaints > 2) return 1;    // still Best, but complaint penalty floors it at 1
+  if (person.score >= rules.full) return 3;
+  return 1; // partial tier
+}
+
+// ---- End of Month: save a full snapshot, record the month's Best Picker/Packer, then reset everyone to 0 ----
+function archiveAndResetMonth(){
+  let month = parseInt(document.getElementById("eom-month").value);
+  let year = parseInt(document.getElementById("eom-year").value);
+  let monthStr = year + "-" + String(month).padStart(2,"0"); // e.g. "2026-07"
+
+  if (!confirm("Archive " + monthStr + " and reset everyone's Utilization/Idle/Speed/Items/Complaints back to 0? Names, Sections and Shifts are kept. This cannot be undone.")) return;
+
+  let wP = getWeights("picker"), wK = getWeights("packer");
+  calculateScores(pickers, wP);
+  calculateScores(packers, wK);
+
+  function findBest(list){ return list.length ? list.reduce(function(a,b){return b.score>a.score?b:a;}, list[0]) : null; }
+  function byShift(list, shift){ return list.filter(function(p){ return (p.shift==="evening"?"evening":"morning") === shift; }); }
+  let dateTag = monthStr + "-01";
+
+  // Remove any prior award records for this exact month, so re-running corrects rather than duplicates
+  history.filter(function(h){ return h.date === dateTag; }).forEach(function(h){
+    leaderboard[h.name] = (leaderboard[h.name] || 0) - h.points;
+  });
+  history = history.filter(function(h){ return h.date !== dateTag; });
+
+  ["morning","evening"].forEach(function(shift){
+    let bestPicker = findBest(byShift(pickers, shift));
+    let bestPacker = findBest(byShift(packers, shift));
+    let rules = QUALIFY_RULES[shift];
+
+    if (bestPicker) {
+      let pts = pointsFor(bestPicker, rules.picker);
+      leaderboard[bestPicker.name] = (leaderboard[bestPicker.name] || 0) + pts;
+      history.push({date:dateTag, name:bestPicker.name, role:"picker", shift:shift, points:pts});
+    }
+    if (bestPacker) {
+      let pts = pointsFor(bestPacker, rules.packer);
+      leaderboard[bestPacker.name] = (leaderboard[bestPacker.name] || 0) + pts;
+      history.push({date:dateTag, name:bestPacker.name, role:"packer", shift:shift, points:pts});
+    }
+  });
+
+  // Save the full raw snapshot (deep copy, so future resets don't affect what's archived)
+  monthlyArchives = monthlyArchives.filter(function(a){ return a.month !== monthStr; }); // replace if re-run
+  monthlyArchives.push({
+    month: monthStr,
+    savedAt: new Date().toISOString(),
+    pickers: JSON.parse(JSON.stringify(pickers)),
+    packers: JSON.parse(JSON.stringify(packers))
+  });
+
+  // Reset performance fields, keep name/section/shift
+  pickers.forEach(function(p){ p.utilization=0; p.idle=0; p.speed=0; p.items=0; p.complaints=0; });
+  packers.forEach(function(p){ p.utilization=0; p.idle=0; p.speed=0; p.items=0; p.complaints=0; });
+
+  persistAll();
+  renderEverything();
+  renderLeaderboard();
+  renderMonthlyReport();
+  populateArchiveDropdown();
+
+  let n = document.getElementById("eom-status");
+  n.textContent = monthStr + " archived and reset ✓";
+  setTimeout(function(){ n.textContent = ""; }, 3000);
+}
+
+function populateArchiveDropdown(){
+  let sel = document.getElementById("view-archive-select");
+  let currentVal = sel.value;
+  sel.innerHTML = "<option value=''>-- Select a saved month --</option>";
+  monthlyArchives.slice().sort(function(a,b){ return b.month.localeCompare(a.month); }).forEach(function(a){
+    let opt = document.createElement("option");
+    opt.value = a.month;
+    opt.textContent = a.month;
+    sel.appendChild(opt);
+  });
+  sel.value = currentVal;
+}
+
+function renderArchiveView(){
+  let monthStr = document.getElementById("view-archive-select").value;
+  let wrap = document.getElementById("archive-view");
+  if (!monthStr) { wrap.innerHTML = ""; return; }
+  let archive = monthlyArchives.find(function(a){ return a.month === monthStr; });
+  if (!archive) { wrap.innerHTML = "<div class='lb-empty'>Not found.</div>"; return; }
+
+  function buildTable(list, title){
+    let rows = list.slice().sort(function(a,b){ return (b.utilization||0)-(a.utilization||0); });
+    let html = "<b>" + title + "</b><table style='margin-top:6px;'><tr><th>Name</th><th>Utilization</th><th>Idle</th><th>Speed</th><th>Items</th><th>Complaints</th></tr>";
+    rows.forEach(function(p){
+      html += "<tr><td>"+p.name+"</td><td>"+p.utilization+"</td><td>"+p.idle+"</td><td>"+p.speed+"</td><td>"+p.items+"</td><td>"+p.complaints+"</td></tr>";
+    });
+    html += "</table>";
+    return html;
+  }
+
+  wrap.innerHTML = "<div style='font-size:12px;color:#888;margin-bottom:10px;'>Saved on " + new Date(archive.savedAt).toLocaleString() + "</div>"
+    + buildTable(archive.pickers, "Pickers") + "<br>" + buildTable(archive.packers, "Packers");
+}
+
+function finalizeDay(){
+  let wP = getWeights("picker"), wK = getWeights("packer");
+  calculateScores(pickers, wP);
+  calculateScores(packers, wK);
+
+  function bump(name, pts){ if(!name) return; leaderboard[name] = (leaderboard[name]||0) + pts; }
+  function findBest(list){ return list.length ? list.reduce(function(a,b){return b.score>a.score?b:a;}, list[0]) : null; }
+  function byShift(list, shift){ return list.filter(function(p){ return (p.shift==="evening"?"evening":"morning") === shift; }); }
+
+  let todayStr = new Date().toISOString().slice(0,10); // "YYYY-MM-DD"
+
+  // If Finalize was already clicked today, undo that earlier contribution from the
+  // running leaderboard first, so clicking it again today corrects rather than double-counts.
+  history.filter(function(h){ return h.date === todayStr; }).forEach(function(h){
+    leaderboard[h.name] = (leaderboard[h.name] || 0) - h.points;
+  });
+  history = history.filter(function(h){ return h.date !== todayStr; });
+
+  ["morning","evening"].forEach(function(shift){
+    let bestPicker = findBest(byShift(pickers, shift));
+    let bestPacker = findBest(byShift(packers, shift));
+    let rules = QUALIFY_RULES[shift];
+
+    let pickerPts = pointsFor(bestPicker, rules.picker);
+    let packerPts = pointsFor(bestPacker, rules.packer);
+
+    if(bestPicker){
+      bump(bestPicker.name, pickerPts);
+      history.push({date:todayStr, name:bestPicker.name, role:"picker", shift:shift, points:pickerPts});
+    }
+    if(bestPacker){
+      bump(bestPacker.name, packerPts);
+      history.push({date:todayStr, name:bestPacker.name, role:"packer", shift:shift, points:packerPts});
+    }
+  });
+
+  persistAll();
+  renderLeaderboard();
+  let n=document.getElementById("saved-note");
+  n.textContent="Day finalized — leaderboard updated ✓";
+  setTimeout(function(){n.textContent="";}, 2500);
+}
+
+// ---- Full backup: downloads everything (pickers, packers, leaderboard, history, archives) as one file ----
+function downloadFullBackup(){
+  let backup = {
+    savedAt: new Date().toISOString(),
+    pickers: pickers,
+    packers: packers,
+    leaderboard: leaderboard,
+    history: history,
+    monthlyArchives: monthlyArchives
+  };
+  let blob = new Blob([JSON.stringify(backup, null, 2)], {type:"application/json"});
+  let url = URL.createObjectURL(blob);
+  let a = document.createElement("a");
+  a.href = url;
+  a.download = "warehouse-backup-" + new Date().toISOString().slice(0,10) + ".json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---- Restore: loads a previously downloaded backup file back into the dashboard ----
+function restoreFromBackup(inputEl){
+  let file = inputEl.files[0];
+  if (!file) return;
+  let reader = new FileReader();
+  reader.onload = function(e){
+    try {
+      let data = JSON.parse(e.target.result);
+      if (!confirm("Restore this backup from " + (data.savedAt || "unknown date") + "? This will REPLACE all current data on the server.")) return;
+      pickers = data.pickers || [];
+      packers = data.packers || [];
+      leaderboard = data.leaderboard || {};
+      history = data.history || [];
+      monthlyArchives = data.monthlyArchives || [];
+      persistAll();
+      renderEverything();
+      renderLeaderboard();
+      renderMonthlyReport();
+      populateArchiveDropdown();
+      alert("Backup restored successfully.");
+    } catch (err) {
+      alert("Couldn't read that file - make sure it's a backup downloaded from this dashboard.");
+    }
+  };
+  reader.readAsText(file);
+  inputEl.value = "";
+}
+
+function exportCSV(kind){
+  let list = kind==="picker" ? pickers : packers;
+  let headers = kind==="picker"
+    ? ["Name","Section","Shift","Utilization","Idle Minutes","Speed","Items","Complaints","Score"]
+    : ["Name","Shift","Utilization","Idle Minutes","Speed","Items","Complaints","Score"];
+  let rows = [headers];
+  list.slice().sort(function(a,b){return b.score-a.score;}).forEach(function(p){
+    let row = kind==="picker"
+      ? [p.name,p.section,p.shift,p.utilization,p.idle,p.speed,p.items,p.complaints,p.score.toFixed(1)]
+      : [p.name,p.shift,p.utilization,p.idle,p.speed,p.items,p.complaints,p.score.toFixed(1)];
+    rows.push(row);
+  });
+  let csv = rows.map(function(r){return r.join(",");}).join("\n");
+  let blob = new Blob([csv], {type:"text/csv"});
+  let url = URL.createObjectURL(blob);
+  let a = document.createElement("a");
+  a.href = url;
+  a.download = kind + "_performance.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function pickerIcon(bgColor){
+  return "<svg width='46' height='46' viewBox='0 0 56 56'>"
+    + "<circle cx='28' cy='28' r='27' fill='"+bgColor+"' stroke='#fff' stroke-width='2'/>"
+    + "<circle cx='28' cy='18' r='7' fill='#fff'/>"
+    + "<path d='M15 39c0-7.5 5.8-13 13-13s13 5.5 13 13' fill='none' stroke='#fff' stroke-width='3.4' stroke-linecap='round'/>"
+    + "<path d='M21 34v-4a7 7 0 0 1 14 0v4' fill='none' stroke='#d9a066' stroke-width='2.6' stroke-linecap='round'/>"
+    + "<rect x='18' y='34' width='20' height='11' rx='2' fill='#d9a066'/>"
+    + "<line x1='18' y1='39.5' x2='38' y2='39.5' stroke='"+bgColor+"' stroke-width='1.6'/>"
+    + "</svg>";
+}
+function packerIcon(bgColor){
+  return "<svg width='46' height='46' viewBox='0 0 56 56'>"
+    + "<circle cx='28' cy='28' r='27' fill='"+bgColor+"' stroke='#fff' stroke-width='2'/>"
+    + "<circle cx='28' cy='17' r='7' fill='#fff'/>"
+    + "<path d='M15 38c0-7.5 5.8-13 13-13s13 5.5 13 13' fill='none' stroke='#fff' stroke-width='3.4' stroke-linecap='round'/>"
+    + "<rect x='16' y='30' width='24' height='16' rx='2' fill='#c9915a'/>"
+    + "<line x1='16' y1='38' x2='40' y2='38' stroke='#8a5a2e' stroke-width='1.8'/>"
+    + "<line x1='28' y1='30' x2='28' y2='46' stroke='#8a5a2e' stroke-width='1.8'/>"
+    + "</svg>";
+}
+
+function renderPerformanceBoard(){
+  let wP = getWeights("picker"), wK = getWeights("packer");
+  if(pickers.length) calculateScores(pickers, wP);
+  if(packers.length) calculateScores(packers, wK);
+
+  function findBest(list){ return list.length ? list.reduce(function(a,b){return b.score>a.score?b:a;}, list[0]) : null; }
+  function findWorst(list){ return list.length ? list.reduce(function(a,b){return b.score<a.score?b:a;}, list[0]) : null; }
+  function byShift(list, shift){ return list.filter(function(p){ return (p.shift==="evening"?"evening":"morning") === shift; }); }
+
+  function card(colorClass, title, icon, person, basePts, sub, fullScore, minScore){
+    fullScore = fullScore || BEST_FULL_SCORE;
+    minScore = minScore || BEST_MIN_SCORE;
+    if (colorClass === "green") {
+      if (!person || person.score < minScore) {
+        let reason = person ? ("top score was "+person.score.toFixed(1)+", needs "+minScore+"+") : "no data yet";
+        return "<div class='board-card green not-qualified'><span class='card-emoji-badge'>😲</span><div class='board-card-head'>"+title+"</div>"
+          + "<div class='board-card-body'><span style='color:#999;font-style:italic;font-size:13px;'>No qualifying "+title.toLowerCase()+" — "+reason+"</span></div></div>";
+      }
+    } else if (!person) {
+      return "<div class='board-card "+colorClass+"'><span class='card-emoji-badge'>😲</span><div class='board-card-head'>"+title+"</div>"
+        + "<div class='board-card-body'><span style='color:#999;font-style:italic;font-size:13px;'>No data yet</span></div></div>";
+    }
+    let penalized = (colorClass==="green" && person.complaints>2);
+    let partial = (colorClass==="green" && !penalized && person.score < fullScore);
+    let pts = penalized ? 1 : (partial ? 1 : basePts);
+    let subText = penalized ? "⚠ more than 2 complaints &mdash; 1 pt (penalty applied)"
+      : (partial ? "below "+fullScore+" full-score bar — 1 pt awarded" : (sub||""));
+    let emoji = colorClass === "green" ? "👏" : "😢";
+    return "<div class='board-card "+colorClass+(partial||penalized?" partial-best":"")+"'><span class='card-emoji-badge'>"+emoji+"</span><div class='board-card-head'>"+title+"</div>"
+      + "<div class='board-card-body'><div><span class='board-card-icon'>"+icon+"</span><span class='board-card-name'>"+person.name+"</span>"
+      + "<div class='board-card-sub'>"+subText+"</div></div><div class='board-card-pts'>"+pts+"</div></div></div>";
+  }
+
+  function shiftSection(shiftLabel, shiftKey){
+    let sp = byShift(pickers, shiftKey), sk = byShift(packers, shiftKey);
+    let bestPicker = findBest(sp), worstPicker = sp.length>1 ? findWorst(sp) : null;
+    let bestPacker = findBest(sk), worstPacker = sk.length>1 ? findWorst(sk) : null;
+    let pRules = QUALIFY_RULES[shiftKey].picker, kRules = QUALIFY_RULES[shiftKey].packer;
+
+    let html = "<div class='shift-heading'>"+shiftLabel+" SHIFT</div><div class='board-grid'>";
+    html += card("green","BEST PICKER",pickerIcon("#2e7d32"),bestPicker,3,bestPicker?("score "+bestPicker.score.toFixed(1)+" • "+bestPicker.section):"",pRules.full,pRules.min);
+    html += card("red","WORST PICKER",pickerIcon("#c62828"),worstPicker,0,worstPicker?("score "+worstPicker.score.toFixed(1)+" • "+worstPicker.section):"");
+    html += card("green","BEST PACKER",packerIcon("#2e7d32"),bestPacker,3,bestPacker?("score "+bestPacker.score.toFixed(1)):"",kRules.full,kRules.min);
+    html += card("red","WORST PACKER",packerIcon("#c62828"),worstPacker,0,worstPacker?("score "+worstPacker.score.toFixed(1)):"");
+    html += "</div>";
+    return html;
+  }
+
+  let html = shiftSection("MORNING", "morning") + shiftSection("EVENING", "evening");
+  document.getElementById("performance-board").innerHTML = html;
+}
+
+// ---- Startup: load data from the server FIRST, then draw everything ----
+(async function init(){
+  await loadFromServer();
+  renderEverything();
+  renderLeaderboard();
+  renderPerformanceBoard();
+
+  let now = new Date();
+  document.getElementById("report-month").value = String(now.getMonth() + 1);
+  document.getElementById("report-year").value = String(now.getFullYear());
+  renderMonthlyReport();
+
+  document.getElementById("eom-month").value = String(now.getMonth() + 1);
+  document.getElementById("eom-year").value = String(now.getFullYear());
+  populateArchiveDropdown();
+})();
+</script>
+</body>
+</html>
