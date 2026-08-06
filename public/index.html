@@ -142,6 +142,8 @@
   <input type="file" id="import-packer-file" accept=".csv,.txt" onchange="importFromFile('packer', this)">
 </div>
 
+<div id="backup-reminder" style="display:none;padding:10px 14px;border-radius:6px;margin-bottom:12px;background:#3a3410;color:#f5b60e;border:1px solid #f5b60e;font-size:13px;width:92%;"></div>
+
 <div class="toolbar">
   <button onclick="finalizeDay()">Finalize &amp; Save Today's Winners</button>
   <button onclick="exportCSV('picker')">Export Pickers CSV</button>
@@ -301,19 +303,31 @@ async function loadFromServer(){
   try {
     let res = await fetch('/api/state');
     let data = await res.json();
-    if (data) {
+    let serverHasRealData = data && ((data.pickers && data.pickers.length) || (data.packers && data.packers.length));
+
+    if (serverHasRealData) {
       pickers = data.pickers || [];
       packers = data.packers || [];
       leaderboard = data.leaderboard || {};
       history = data.history || [];
       monthlyArchives = data.monthlyArchives || [];
     } else {
-      // Nothing saved on the server yet - start with the defaults
-      pickers = defaultPickers;
-      packers = defaultPackers;
-      leaderboard = {};
-      history = [];
-      monthlyArchives = [];
+      // Server came back empty - check if THIS browser has a local safety-net copy before giving up
+      let local = getLocalSafetyBackup();
+      if (local && ((local.pickers && local.pickers.length) || (local.packers && local.packers.length))) {
+        if (confirm("The server has no data, but this browser has a local backup from " + new Date(local.savedAt).toLocaleString() + ". Restore it now?")) {
+          pickers = local.pickers || [];
+          packers = local.packers || [];
+          leaderboard = local.leaderboard || {};
+          history = local.history || [];
+          monthlyArchives = local.monthlyArchives || [];
+          await persistAll(); // push the recovered data back up to the server immediately
+        } else {
+          pickers = defaultPickers; packers = defaultPackers; leaderboard = {}; history = []; monthlyArchives = [];
+        }
+      } else {
+        pickers = defaultPickers; packers = defaultPackers; leaderboard = {}; history = []; monthlyArchives = [];
+      }
     }
     document.getElementById("conn-note").textContent = "";
   } catch (e) {
@@ -323,8 +337,23 @@ async function loadFromServer(){
   }
 }
 
+// ---- Local safety net: a copy saved to THIS BROWSER only, updated automatically on every change ----
+function saveLocalSafetyBackup(){
+  try {
+    let backup = { savedAt: new Date().toISOString(), pickers: pickers, packers: packers, leaderboard: leaderboard, history: history, monthlyArchives: monthlyArchives };
+    localStorage.setItem("warehouseAutoBackup", JSON.stringify(backup));
+  } catch(e){ /* localStorage unavailable - silently skip, this is just a bonus safety net */ }
+}
+function getLocalSafetyBackup(){
+  try {
+    let raw = localStorage.getItem("warehouseAutoBackup");
+    return raw ? JSON.parse(raw) : null;
+  } catch(e){ return null; }
+}
+
 // ---- BACKEND CONNECTION: send the current data to the server to save ----
 async function persistAll(){
+  saveLocalSafetyBackup(); // always keep a local copy too, automatically, every single save - no clicking needed
   try {
     await fetch('/api/state', {
       method: 'POST',
@@ -925,9 +954,10 @@ function archiveAndResetMonth(){
   renderLeaderboard();
   renderMonthlyReport();
   populateArchiveDropdown();
+  downloadFullBackup(true); // auto-backup right after archiving - this is your most valuable data, protect it automatically
 
   let n = document.getElementById("eom-status");
-  n.textContent = monthStr + " archived and reset ✓";
+  n.textContent = monthStr + " archived, reset, and backed up ✓";
   setTimeout(function(){ n.textContent = ""; }, 3000);
 }
 
@@ -1003,13 +1033,14 @@ function finalizeDay(){
 
   persistAll();
   renderLeaderboard();
+  downloadFullBackup(true); // auto-backup after finalizing, since this data is worth protecting
   let n=document.getElementById("saved-note");
-  n.textContent="Day finalized — leaderboard updated ✓";
-  setTimeout(function(){n.textContent="";}, 2500);
+  n.textContent="Day finalized — leaderboard updated & backup downloaded ✓";
+  setTimeout(function(){n.textContent="";}, 3000);
 }
 
 // ---- Full backup: downloads everything (pickers, packers, leaderboard, history, archives) as one file ----
-function downloadFullBackup(){
+function downloadFullBackup(silent){
   let backup = {
     savedAt: new Date().toISOString(),
     pickers: pickers,
@@ -1025,6 +1056,37 @@ function downloadFullBackup(){
   a.download = "warehouse-backup-" + new Date().toISOString().slice(0,10) + ".json";
   a.click();
   URL.revokeObjectURL(url);
+
+  // Remember when we last backed up, purely so this browser can show a reminder banner
+  try { localStorage.setItem("lastBackupTime", new Date().toISOString()); } catch(e){}
+  renderBackupReminder();
+
+  if (!silent) {
+    let n = document.getElementById("saved-note");
+    n.textContent = "Backup downloaded ✓";
+    setTimeout(function(){ n.textContent = ""; }, 2000);
+  }
+}
+
+function renderBackupReminder(){
+  let el = document.getElementById("backup-reminder");
+  if (!el) return;
+  let lastStr;
+  try { lastStr = localStorage.getItem("lastBackupTime"); } catch(e){ lastStr = null; }
+
+  if (!lastStr) {
+    el.innerHTML = "⚠️ No backup has ever been downloaded on this device. Click <b>Download Full Backup</b> now.";
+    el.style.display = "block";
+    return;
+  }
+  let daysSince = Math.floor((Date.now() - new Date(lastStr).getTime()) / (1000*60*60*24));
+  if (daysSince >= 3) {
+    el.innerHTML = "⚠️ Last backup was " + daysSince + " day(s) ago. Click <b>Download Full Backup</b> to stay safe.";
+    el.style.display = "block";
+  } else {
+    el.innerHTML = "✅ Last backup: " + daysSince + " day(s) ago.";
+    el.style.display = "block";
+  }
 }
 
 // ---- Restore: loads a previously downloaded backup file back into the dashboard ----
@@ -1165,6 +1227,7 @@ function renderPerformanceBoard(){
   document.getElementById("eom-month").value = String(now.getMonth() + 1);
   document.getElementById("eom-year").value = String(now.getFullYear());
   populateArchiveDropdown();
+  renderBackupReminder();
 })();
 </script>
 </body>
