@@ -3,7 +3,16 @@
 <head>
 <title>Packing Performance Board</title>
 <style>
-  body{font-family:Arial,sans-serif;background:#12151a;padding:30px;color:#f0f0f0;position:relative;min-height:100vh;box-sizing:border-box;}
+  body{font-family:Arial,sans-serif;background:#12151a;padding:30px;color:#f0f0f0;position:relative;min-height:100vh;box-sizing:border-box;overflow-x:hidden;transition:background 1.2s ease;}
+  body.shift-morning{background:linear-gradient(160deg,#12151a 0%,#0e1a24 55%,#0c1f2c 100%);}
+  body.shift-evening{background:linear-gradient(160deg,#12151a 0%,#241a0e 55%,#2c1f0c 100%);}
+  .floating-bg{position:fixed;top:0;left:0;width:100%;height:100%;overflow:hidden;pointer-events:none;z-index:0;}
+  .floating-emoji{position:absolute;bottom:-80px;opacity:0.16;animation:floatUp linear infinite;filter:drop-shadow(0 0 6px rgba(245,182,14,0.15));}
+  @keyframes floatUp{
+    0%{transform:translateY(0) rotate(0deg);}
+    100%{transform:translateY(-115vh) rotate(360deg);}
+  }
+  .page-content{position:relative;z-index:1;padding-bottom:50px;}
   .board-header{display:flex;align-items:center;justify-content:space-between;width:96%;margin:0 auto 10px;}
   .board-header h1{font-size:clamp(20px, 3.2vw, 40px);margin:0;white-space:nowrap;color:#fff;letter-spacing:1px;}
   .board-icon{font-size:clamp(22px, 3.2vw, 40px);}
@@ -30,6 +39,16 @@
   .board-card.not-qualified .board-card-head{background:#444!important;}
   .board-card.partial-best .board-card-head{background:#8a6d1a!important;}
   .board-card.partial-best .board-card-pts{color:#f5b60e!important;}
+  .board-card.flash{animation:cardFlash 2.2s ease-out;}
+  @keyframes cardFlash{
+    0%{box-shadow:0 0 0 4px rgba(245,182,14,0.9),0 0 40px rgba(245,182,14,0.7);}
+    100%{box-shadow:none;}
+  }
+  .live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#4caf50;margin-right:6px;animation:livePulse 1.6s ease-in-out infinite;}
+  @keyframes livePulse{0%,100%{opacity:1;}50%{opacity:0.25;}}
+  .ticker-strip{position:fixed;bottom:0;left:0;width:100%;background:#0a0c10;border-top:1px solid #333;padding:10px 0;overflow:hidden;white-space:nowrap;z-index:3;}
+  .ticker-track{display:inline-block;padding-left:100%;animation:tickerScroll 40s linear infinite;font-size:16px;color:#f5b60e;font-weight:600;letter-spacing:0.5px;}
+  @keyframes tickerScroll{0%{transform:translateX(0);}100%{transform:translateX(-100%);}}
 
   .leaderboard-panel{width:96%;margin:34px auto 0;background:#1b1f27;border:1px solid #333;border-radius:12px;padding:22px 26px;}
   .lb-heading{font-weight:800;font-size:clamp(20px, 2.6vw, 28px);color:#f5b60e;letter-spacing:1.5px;margin-bottom:14px;}
@@ -46,6 +65,9 @@
 </head>
 <body>
 
+<div class="floating-bg" id="floating-bg"></div>
+
+<div class="page-content">
 <div class="board-header">
   <h1>📦 PACKING PERFORMANCE BOARD</h1>
   <span class="board-icon">🏆</span>
@@ -53,7 +75,7 @@
 <div class="board-rule"><b>⚠ Rule:</b> if a Best Picker or Packer has <b>more than 2 complaints</b> (month-to-date), <b>3 points are deducted</b>.</div>
 
 <div id="performance-board"></div>
-<div class="updated-note" id="updated-note"></div>
+<div class="updated-note"><span class="live-dot"></span><span id="updated-note"></span></div>
 
 <div class="leaderboard-panel">
   <div class="lb-heading">🏆 MONTHLY LEADERBOARD</div>
@@ -68,8 +90,11 @@
   </div>
   <div id="tv-leaderboard"></div>
 </div>
+</div>
 
-<div id="start-overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+<div class="ticker-strip"><div class="ticker-track" id="ticker-track"></div></div>
+
+<div id="start-overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;">
   <div style="color:#fff;font-size:20px;">Tap to start the display and enable voice announcements</div>
   <button onclick="startBoard()" style="font-size:18px;padding:14px 28px;background:#f5b60e;color:#12151a;border:none;border-radius:8px;font-weight:800;cursor:pointer;">▶ Start Display</button>
 </div>
@@ -108,17 +133,18 @@ function calculateScores(list){
 function findBest(list){ return list.length ? list.reduce(function(a,b){return b.score>a.score?b:a;}, list[0]) : null; }
 function findWorst(list){ return list.length ? list.reduce(function(a,b){return b.score<a.score?b:a;}, list[0]) : null; }
 
-function card(colorClass, title, icon, person, basePts, sub, fullScore, minScore){
+function card(colorClass, title, icon, person, basePts, sub, fullScore, minScore, flash){
   fullScore = fullScore || BEST_FULL_SCORE;
   minScore = minScore || BEST_MIN_SCORE;
+  let flashClassStr = flash ? " flash" : "";
   if (colorClass === "green") {
     if (!person || person.score < minScore) {
       let reason = person ? ("top score was "+person.score.toFixed(1)+", needs "+minScore+"+") : "no data yet";
-      return "<div class='board-card green not-qualified'><span class='card-emoji-badge'>😲</span><div class='board-card-head'>"+title+"</div>"
+      return "<div class='board-card green not-qualified"+flashClassStr+"'><span class='card-emoji-badge'>😲</span><div class='board-card-head'>"+title+"</div>"
         + "<div class='board-card-body'><span style='color:#999;font-style:italic;'>No qualifying "+title.toLowerCase()+" — "+reason+"</span></div></div>";
     }
   } else if (!person) {
-    return "<div class='board-card "+colorClass+"'><span class='card-emoji-badge'>😲</span><div class='board-card-head'>"+title+"</div>"
+    return "<div class='board-card "+colorClass+flashClassStr+"'><span class='card-emoji-badge'>😲</span><div class='board-card-head'>"+title+"</div>"
       + "<div class='board-card-body'><span style='color:#999;font-style:italic;'>No data yet</span></div></div>";
   }
   let penalized = (colorClass==="green" && person.complaints>2);
@@ -127,7 +153,7 @@ function card(colorClass, title, icon, person, basePts, sub, fullScore, minScore
   let subText = penalized ? "⚠ more than 2 complaints — 1 pt (penalty applied)"
     : (partial ? "below "+fullScore+" full-score bar — 1 pt awarded" : (sub||""));
   let emoji = colorClass === "green" ? "👏" : "😢";
-  return "<div class='board-card "+colorClass+(partial||penalized?" partial-best":"")+"'><span class='card-emoji-badge'>"+emoji+"</span><div class='board-card-head'>"+title+"</div>"
+  return "<div class='board-card "+colorClass+(partial||penalized?" partial-best":"")+flashClassStr+"'><span class='card-emoji-badge'>"+emoji+"</span><div class='board-card-head'>"+title+"</div>"
     + "<div class='board-card-body'><div><span class='board-card-icon'>"+icon+"</span><span class='board-card-name'>"+person.name+"</span>"
     + "<div class='board-card-sub'>"+subText+"</div></div><div class='board-card-pts'>"+pts+"</div></div></div>";
 }
@@ -155,17 +181,30 @@ function packerIcon(bgColor){
 
 function byShift(list, shift){ return list.filter(function(p){ return (p.shift==="evening"?"evening":"morning") === shift; }); }
 
+let lastLeaders = {}; // tracks the last-seen name per card key, so we know when to flash
+
 function shiftSectionHTML(shiftLabel, shiftKey, pickers, packers){
   let sp = byShift(pickers, shiftKey), sk = byShift(packers, shiftKey);
   let bestPicker = findBest(sp), worstPicker = sp.length>1 ? findWorst(sp) : null;
   let bestPacker = findBest(sk), worstPacker = sk.length>1 ? findWorst(sk) : null;
   let pRules = QUALIFY_RULES[shiftKey].picker, kRules = QUALIFY_RULES[shiftKey].packer;
 
+  function isFlashing(key, person){
+    let name = person ? person.name : null;
+    let changed = lastLeaders[key] !== undefined && lastLeaders[key] !== name;
+    lastLeaders[key] = name;
+    return changed;
+  }
+  let bpFlash = isFlashing(shiftKey+"-bestPicker", bestPicker);
+  let wpFlash = isFlashing(shiftKey+"-worstPicker", worstPicker);
+  let bkFlash = isFlashing(shiftKey+"-bestPacker", bestPacker);
+  let wkFlash = isFlashing(shiftKey+"-worstPacker", worstPacker);
+
   let html = "<div class='shift-heading'>"+shiftLabel+" SHIFT</div><div class='board-grid'>";
-  html += card("green","BEST PICKER",pickerIcon("#1b6e2c"),bestPicker,3,bestPicker?("score "+bestPicker.score.toFixed(1)+(bestPicker.section?" • "+bestPicker.section:"")):"",pRules.full,pRules.min);
-  html += card("red","WORST PICKER",pickerIcon("#b5271f"),worstPicker,0,worstPicker?("score "+worstPicker.score.toFixed(1)+(worstPicker.section?" • "+worstPicker.section:"")):"");
-  html += card("green","BEST PACKER",packerIcon("#1b6e2c"),bestPacker,3,bestPacker?("score "+bestPacker.score.toFixed(1)):"",kRules.full,kRules.min);
-  html += card("red","WORST PACKER",packerIcon("#b5271f"),worstPacker,0,worstPacker?("score "+worstPacker.score.toFixed(1)):"");
+  html += card("green","BEST PICKER",pickerIcon("#1b6e2c"),bestPicker,3,bestPicker?("score "+bestPicker.score.toFixed(1)+(bestPicker.section?" • "+bestPicker.section:"")):"",pRules.full,pRules.min,bpFlash);
+  html += card("red","WORST PICKER",pickerIcon("#b5271f"),worstPicker,0,worstPicker?("score "+worstPicker.score.toFixed(1)+(worstPicker.section?" • "+worstPicker.section:"")):"",null,null,wpFlash);
+  html += card("green","BEST PACKER",packerIcon("#1b6e2c"),bestPacker,3,bestPacker?("score "+bestPacker.score.toFixed(1)):"",kRules.full,kRules.min,bkFlash);
+  html += card("red","WORST PACKER",packerIcon("#b5271f"),worstPacker,0,worstPacker?("score "+worstPacker.score.toFixed(1)):"",null,null,wkFlash);
   html += "</div>";
   return html;
 }
@@ -176,6 +215,8 @@ let latestPickers = [], latestPackers = [], latestHistory = [];
 function renderCurrentShift(){
   let label = currentShift === "morning" ? "MORNING" : "EVENING";
   document.getElementById("performance-board").innerHTML = shiftSectionHTML(label, currentShift, latestPickers, latestPackers);
+  document.body.classList.remove("shift-morning","shift-evening");
+  document.body.classList.add(currentShift === "morning" ? "shift-morning" : "shift-evening");
 }
 
 function setupYearDropdown(){
@@ -255,6 +296,26 @@ function switchShift(){
   renderCurrentShift();
 }
 
+function generateTickerContent(){
+  let parts = [];
+  let allPickers = latestPickers, allPackers = latestPackers;
+
+  let topPicker = allPickers.length ? allPickers.reduce(function(a,b){return b.score>a.score?b:a;}, allPickers[0]) : null;
+  let topPacker = allPackers.length ? allPackers.reduce(function(a,b){return b.score>a.score?b:a;}, allPackers[0]) : null;
+  if (topPicker) parts.push("🏆 Top picker overall: " + topPicker.name + " (" + topPicker.score.toFixed(1) + ")");
+  if (topPacker) parts.push("🏆 Top packer overall: " + topPacker.name + " (" + topPacker.score.toFixed(1) + ")");
+
+  let mostComplaints = allPickers.concat(allPackers).filter(function(p){return p.complaints>0;}).sort(function(a,b){return b.complaints-a.complaints;})[0];
+  if (mostComplaints) parts.push("⚠ Most complaints this month: " + mostComplaints.name + " (" + mostComplaints.complaints + ")");
+
+  let totalItems = allPickers.reduce(function(s,p){return s+(p.items||0);},0) + allPackers.reduce(function(s,p){return s+(p.items||0);},0);
+  if (totalItems) parts.push("📦 Total items processed this month: " + totalItems.toLocaleString());
+
+  if (parts.length === 0) parts.push("Waiting for data...");
+  let text = parts.join("     •     ");
+  document.getElementById("ticker-track").textContent = text + "     •     " + text; // duplicated for a seamless loop
+}
+
 async function refreshData(){
   try {
     let res = await fetch('/api/state');
@@ -266,6 +327,7 @@ async function refreshData(){
     if (latestPackers.length) calculateScores(latestPackers);
     renderCurrentShift();
     renderTvLeaderboard();
+    generateTickerContent();
     document.getElementById("updated-note").textContent = "Last updated: " + new Date().toLocaleTimeString();
   } catch(e){
     document.getElementById("updated-note").textContent = "⚠ Can't reach server — check the dashboard is still running.";
@@ -279,7 +341,25 @@ function startBoard(){
   setInterval(switchShift, 20 * 60 * 1000); // switch shift every 20 minutes
 }
 
+function createFloatingBackground(){
+  let container = document.getElementById("floating-bg");
+  let emojis = ["📦","🏆","⭐","👏","✨","🚀"];
+  let count = 18;
+  let html = "";
+  for (let i = 0; i < count; i++){
+    let emoji = emojis[Math.floor(Math.random() * emojis.length)];
+    let leftPct = Math.random() * 100;
+    let sizePx = 24 + Math.random() * 34; // 24-58px
+    let duration = 18 + Math.random() * 18; // 18-36s
+    let delay = Math.random() * 25; // stagger so they don't all start together
+    html += "<span class='floating-emoji' style='left:" + leftPct.toFixed(1) + "%;font-size:" + sizePx.toFixed(0) + "px;animation-duration:" + duration.toFixed(1) + "s;animation-delay:-" + delay.toFixed(1) + "s;'>" + emoji + "</span>";
+  }
+  container.innerHTML = html;
+}
+
 setupYearDropdown();
+createFloatingBackground();
+document.body.classList.add("shift-morning");
 refreshData(); // show data immediately behind the start overlay, even before audio is enabled
 </script>
 </body>
