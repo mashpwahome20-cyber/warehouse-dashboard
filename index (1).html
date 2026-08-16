@@ -63,6 +63,9 @@
   .board-card.not-qualified .board-card-head{background:#555!important;}
   .board-card.partial-best .board-card-head{background:#8a6d1a!important;}
   .board-card.partial-best .board-card-pts{color:#f5b60e!important;}
+  .board-card.tier-high{box-shadow:0 0 14px rgba(46,159,64,0.5);}
+  .board-card.tier-perfect{box-shadow:0 0 22px rgba(255,215,0,0.7);border-color:#ffd700!important;}
+  .board-card.tier-perfect .board-card-pts{color:#ffd700!important;}
   .shift-heading{font-weight:800;font-size:22px;color:#c47f0a;letter-spacing:1.5px;margin:20px 0 10px;width:96%;border-bottom:2px solid #f5b60e;padding-bottom:6px;}
 </style>
 </head>
@@ -303,19 +306,31 @@ async function loadFromServer(){
   try {
     let res = await fetch('/api/state');
     let data = await res.json();
-    if (data) {
+    let serverHasRealData = data && ((data.pickers && data.pickers.length) || (data.packers && data.packers.length));
+
+    if (serverHasRealData) {
       pickers = data.pickers || [];
       packers = data.packers || [];
       leaderboard = data.leaderboard || {};
       history = data.history || [];
       monthlyArchives = data.monthlyArchives || [];
     } else {
-      // Nothing saved on the server yet - start with the defaults
-      pickers = defaultPickers;
-      packers = defaultPackers;
-      leaderboard = {};
-      history = [];
-      monthlyArchives = [];
+      // Server came back empty - check if THIS browser has a local safety-net copy before giving up
+      let local = getLocalSafetyBackup();
+      if (local && ((local.pickers && local.pickers.length) || (local.packers && local.packers.length))) {
+        if (confirm("The server has no data, but this browser has a local backup from " + new Date(local.savedAt).toLocaleString() + ". Restore it now?")) {
+          pickers = local.pickers || [];
+          packers = local.packers || [];
+          leaderboard = local.leaderboard || {};
+          history = local.history || [];
+          monthlyArchives = local.monthlyArchives || [];
+          await persistAll(); // push the recovered data back up to the server immediately
+        } else {
+          pickers = defaultPickers; packers = defaultPackers; leaderboard = {}; history = []; monthlyArchives = [];
+        }
+      } else {
+        pickers = defaultPickers; packers = defaultPackers; leaderboard = {}; history = []; monthlyArchives = [];
+      }
     }
     document.getElementById("conn-note").textContent = "";
   } catch (e) {
@@ -325,8 +340,23 @@ async function loadFromServer(){
   }
 }
 
+// ---- Local safety net: a copy saved to THIS BROWSER only, updated automatically on every change ----
+function saveLocalSafetyBackup(){
+  try {
+    let backup = { savedAt: new Date().toISOString(), pickers: pickers, packers: packers, leaderboard: leaderboard, history: history, monthlyArchives: monthlyArchives };
+    localStorage.setItem("warehouseAutoBackup", JSON.stringify(backup));
+  } catch(e){ /* localStorage unavailable - silently skip, this is just a bonus safety net */ }
+}
+function getLocalSafetyBackup(){
+  try {
+    let raw = localStorage.getItem("warehouseAutoBackup");
+    return raw ? JSON.parse(raw) : null;
+  } catch(e){ return null; }
+}
+
 // ---- BACKEND CONNECTION: send the current data to the server to save ----
 async function persistAll(){
+  saveLocalSafetyBackup(); // always keep a local copy too, automatically, every single save - no clicking needed
   try {
     await fetch('/api/state', {
       method: 'POST',
@@ -864,10 +894,13 @@ function exportMonthlyReportCSV(){
 // ---- Shared: how many points a Best Picker/Packer earns given their score and shift rules ----
 function pointsFor(person, rules){
   if (!person) return 0;
-  if (person.score < rules.min) return 0; // doesn't even qualify as Best
-  if (person.complaints > 2) return 1;    // still Best, but complaint penalty floors it at 1
-  if (person.score >= rules.full) return 3;
-  return 1; // partial tier
+  if (person.score < rules.min) return 0;      // doesn't even qualify as Best
+  if (person.complaints > 2) return 1;         // still Best, but complaint penalty floors it at 1
+  if (person.score >= 100) return 10;          // perfect score
+  if (person.score >= 95) return 7;            // 95-99.9%
+  if (person.score >= 90) return 5;            // 90-94.9%
+  if (person.score >= rules.full) return 3;    // original full-qualify tier (80/72/65 depending on shift/role)
+  return 1;                                    // partial tier
 }
 
 // ---- End of Month: save a full snapshot, record the month's Best Picker/Packer, then reset everyone to 0 ----
@@ -1156,12 +1189,26 @@ function renderPerformanceBoard(){
         + "<div class='board-card-body'><span style='color:#999;font-style:italic;font-size:13px;'>No data yet</span></div></div>";
     }
     let penalized = (colorClass==="green" && person.complaints>2);
-    let partial = (colorClass==="green" && !penalized && person.score < fullScore);
-    let pts = penalized ? 1 : (partial ? 1 : basePts);
-    let subText = penalized ? "⚠ more than 2 complaints &mdash; 1 pt (penalty applied)"
-      : (partial ? "below "+fullScore+" full-score bar — 1 pt awarded" : (sub||""));
+    let pts, subText, tierClass = "";
+    if (colorClass === "green") {
+      if (penalized) {
+        pts = 1; subText = "⚠ more than 2 complaints &mdash; 1 pt (penalty applied)"; tierClass = " partial-best";
+      } else if (person.score >= 100) {
+        pts = 10; subText = "🌟 Perfect score — 10 pts"; tierClass = " tier-perfect";
+      } else if (person.score >= 95) {
+        pts = 7; subText = "⭐ 95%+ score — 7 pts"; tierClass = " tier-high";
+      } else if (person.score >= 90) {
+        pts = 5; subText = "⭐ 90%+ score — 5 pts"; tierClass = " tier-high";
+      } else if (person.score >= fullScore) {
+        pts = basePts; subText = sub || "";
+      } else {
+        pts = 1; subText = "below "+fullScore+" full-score bar — 1 pt awarded"; tierClass = " partial-best";
+      }
+    } else {
+      pts = basePts; subText = sub || "";
+    }
     let emoji = colorClass === "green" ? "👏" : "😢";
-    return "<div class='board-card "+colorClass+(partial||penalized?" partial-best":"")+"'><span class='card-emoji-badge'>"+emoji+"</span><div class='board-card-head'>"+title+"</div>"
+    return "<div class='board-card "+colorClass+tierClass+"'><span class='card-emoji-badge'>"+emoji+"</span><div class='board-card-head'>"+title+"</div>"
       + "<div class='board-card-body'><div><span class='board-card-icon'>"+icon+"</span><span class='board-card-name'>"+person.name+"</span>"
       + "<div class='board-card-sub'>"+subText+"</div></div><div class='board-card-pts'>"+pts+"</div></div></div>";
   }
