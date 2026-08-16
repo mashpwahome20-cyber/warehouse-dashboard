@@ -40,6 +40,9 @@
   .board-card.not-qualified .board-card-head{background:#444!important;}
   .board-card.partial-best .board-card-head{background:#8a6d1a!important;}
   .board-card.partial-best .board-card-pts{color:#f5b60e!important;}
+  .board-card.tier-high{box-shadow:0 0 18px rgba(46,159,64,0.55);}
+  .board-card.tier-perfect{box-shadow:0 0 28px rgba(255,215,0,0.75);border-color:#ffd700!important;}
+  .board-card.tier-perfect .board-card-pts{color:#ffd700!important;}
   .board-card.flash{animation:cardFlash 2.2s ease-out;}
   @keyframes cardFlash{
     0%{box-shadow:0 0 0 4px rgba(245,182,14,0.9),0 0 40px rgba(245,182,14,0.7);}
@@ -150,12 +153,26 @@ function card(colorClass, title, icon, person, basePts, sub, fullScore, minScore
       + "<div class='board-card-body'><span style='color:#999;font-style:italic;'>No data yet</span></div></div>";
   }
   let penalized = (colorClass==="green" && person.complaints>2);
-  let partial = (colorClass==="green" && !penalized && person.score < fullScore);
-  let pts = penalized ? 1 : (partial ? 1 : basePts);
-  let subText = penalized ? "⚠ more than 2 complaints — 1 pt (penalty applied)"
-    : (partial ? "below "+fullScore+" full-score bar — 1 pt awarded" : (sub||""));
+  let pts, subText, tierClass = "";
+  if (colorClass === "green") {
+    if (penalized) {
+      pts = 1; subText = "⚠ more than 2 complaints — 1 pt (penalty applied)"; tierClass = " partial-best";
+    } else if (person.score >= 100) {
+      pts = 10; subText = "🌟 Perfect score — 10 pts"; tierClass = " tier-perfect";
+    } else if (person.score >= 95) {
+      pts = 7; subText = "⭐ 95%+ score — 7 pts"; tierClass = " tier-high";
+    } else if (person.score >= 90) {
+      pts = 5; subText = "⭐ 90%+ score — 5 pts"; tierClass = " tier-high";
+    } else if (person.score >= fullScore) {
+      pts = basePts; subText = sub || "";
+    } else {
+      pts = 1; subText = "below "+fullScore+" full-score bar — 1 pt awarded"; tierClass = " partial-best";
+    }
+  } else {
+    pts = basePts; subText = sub || "";
+  }
   let emoji = colorClass === "green" ? "👏" : "😢";
-  return "<div class='board-card "+colorClass+(partial||penalized?" partial-best":"")+flashClassStr+"'><span class='card-emoji-badge'>"+emoji+"</span><div class='board-card-head'>"+title+"</div>"
+  return "<div class='board-card "+colorClass+tierClass+flashClassStr+"'><span class='card-emoji-badge'>"+emoji+"</span><div class='board-card-head'>"+title+"</div>"
     + "<div class='board-card-body'><div><span class='board-card-icon'>"+icon+"</span><span class='board-card-name'>"+person.name+"</span>"
     + "<div class='board-card-sub'>"+subText+"</div></div><div class='board-card-pts'>"+pts+"</div></div></div>";
 }
